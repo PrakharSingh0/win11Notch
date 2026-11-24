@@ -20,4 +20,16 @@ public sealed class AppSettings
 
     /// <summary>Alpha for the WPF IPS tint overlay (0–1). 0.70 = 70% opaque dark-slate.</summary>
     public double AcrylicTintOpacity { get; set; } = 0.70;
+
+    /// <summary>Whether to start Win11Notch automatically with Windows.</summary>
+    public bool LaunchAtStartup { get; set; } = false;
+
+    /// <summary>Whether dragging a file over the notch automatically expands it.</summary>
+    public bool AutoExpandOnDrag { get; set; } = true;
+
+    /// <summary>Whether to show Dynamic Island temporary toast on song change.</summary>
+    public bool ShowMediaIslandNotifications { get; set; } = true;
+
+    /// <summary>Global hotkey preset (e.g. "Alt+Space", "Win+Z", "Ctrl+Shift+Space", "Ctrl+~").</summary>
+    public string HotkeyPreset { get; set; } = "Alt+Space";
 }

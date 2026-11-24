@@ -53,6 +53,10 @@ public sealed class TrayService : IDisposable
             Icon              = CreateDefaultIcon()
         };
 
+#pragma warning disable CS8622
+        _notifyIcon.LeftClick += (_, _) => _stateMachine.Toggle();
+#pragma warning restore CS8622
+
         // Wire dock-edge changes from ViewModel
         _vm.DockEdgeChanged += (_, edge) =>
         {
@@ -94,6 +98,10 @@ public sealed class TrayService : IDisposable
         UpdateDockChecks(_settings.Current.DockEdge);
 
         menu.Items.Add(new Separator());
+
+        var settingsItem = new MenuItem { Header = "Settings..." };
+        settingsItem.Click += (_, _) => _window.ShowSettingsWindow();
+        menu.Items.Add(settingsItem);
 
         var reloadConfig = new MenuItem { Header = "Reload Config" };
         reloadConfig.Click += (_, _) => _vm.ReloadConfigCommand.Execute(null);

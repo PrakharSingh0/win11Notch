@@ -13,40 +13,63 @@ public sealed class ShelfItem
     public string      FileName      { get; init; } = string.Empty;
     public string      FormattedSize { get; init; } = string.Empty;
     public ImageSource? Icon         { get; init; }
+    public bool        IsDirectory   { get; init; }
+    public string      TypeBadge     { get; init; } = "FILE";
 
     public static ShelfItem FromFile(string path)
     {
-        var fi = new FileInfo(path);
-        string size = fi.Exists ? FormatBytes(fi.Length) : "0 B";
+        bool isDir = Directory.Exists(path);
+        string name = isDir ? new DirectoryInfo(path).Name : Path.GetFileName(path);
+        string size = isDir ? "Folder" : (File.Exists(path) ? FormatBytes(new FileInfo(path).Length) : "0 B");
+        string badge = isDir ? "DIR" : Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+        if (string.IsNullOrEmpty(badge)) badge = "FILE";
 
         ImageSource? icon = null;
         try
         {
-            using var sysIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-            if (sysIcon != null)
+            string ext = Path.GetExtension(path).ToLowerInvariant();
+            if (!isDir && ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".bmp" or ".ico" && File.Exists(path))
             {
-                using var bmp = sysIcon.ToBitmap();
-                using var ms = new MemoryStream();
-                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                ms.Position = 0;
+                // High quality image thumbnail
+                var thumb = new BitmapImage();
+                thumb.BeginInit();
+                thumb.CacheOption = BitmapCacheOption.OnLoad;
+                thumb.DecodePixelWidth = 64;
+                thumb.UriSource = new Uri(path);
+                thumb.EndInit();
+                thumb.Freeze();
+                icon = thumb;
+            }
+            else if (File.Exists(path))
+            {
+                using var sysIcon = System.Drawing.Icon.ExtractAssociatedIcon(path);
+                if (sysIcon != null)
+                {
+                    using var bmp = sysIcon.ToBitmap();
+                    using var ms = new MemoryStream();
+                    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    ms.Position = 0;
 
-                var img = new BitmapImage();
-                img.BeginInit();
-                img.CacheOption = BitmapCacheOption.OnLoad;
-                img.StreamSource = ms;
-                img.EndInit();
-                img.Freeze();
-                icon = img;
+                    var img = new BitmapImage();
+                    img.BeginInit();
+                    img.CacheOption = BitmapCacheOption.OnLoad;
+                    img.StreamSource = ms;
+                    img.EndInit();
+                    img.Freeze();
+                    icon = img;
+                }
             }
         }
-        catch { /* fallback icon */ }
+        catch { /* fallback */ }
 
         return new ShelfItem
         {
             FilePath      = path,
-            FileName      = fi.Name,
+            FileName      = name,
             FormattedSize = size,
-            Icon          = icon
+            Icon          = icon,
+            IsDirectory   = isDir,
+            TypeBadge     = badge
         };
     }
 

@@ -41,12 +41,15 @@ public sealed class NotchStateMachine
         RestartGraceTimer();
     }
 
-    /// <summary>Call on mouse-click while in CollapsedHover to open PeekExpanded.</summary>
+    /// <summary>Call on mouse-click to open PeekExpanded from Idle or CollapsedHover.</summary>
     public void OnClick()
     {
-        if (_state != NotchState.CollapsedHover) return;
-        _graceTimer?.Stop();
-        Transition(NotchState.PeekExpanded);
+        if (_state is NotchState.Idle or NotchState.CollapsedHover)
+        {
+            _dwellTimer?.Stop();
+            _graceTimer?.Stop();
+            Transition(NotchState.PeekExpanded);
+        }
     }
 
     /// <summary>Triggered when a file drag reaches the notch edge.</summary>
@@ -56,6 +59,17 @@ public sealed class NotchStateMachine
         _dwellTimer?.Stop();
         _graceTimer?.Stop();
         Transition(NotchState.PeekExpanded);
+    }
+
+    /// <summary>Expands from Idle to CollapsedHover as a Dynamic Island temporary toast.</summary>
+    public void ShowToastBanner()
+    {
+        if (_state == NotchState.Idle)
+        {
+            _dwellTimer?.Stop();
+            _graceTimer?.Stop();
+            Transition(NotchState.CollapsedHover);
+        }
     }
 
     /// <summary>Collapses to Idle from any state (Esc / click-outside / tray action).</summary>

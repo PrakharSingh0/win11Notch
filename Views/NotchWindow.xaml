@@ -9,7 +9,8 @@
         ShowInTaskbar="False"
         ResizeMode="NoResize"
         AllowDrop="True"
-        Width="72" Height="5">
+        PreviewMouseLeftButtonDown="OnWindowPreviewMouseLeftButtonDown"
+        Width="72" Height="8">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -42,60 +43,218 @@
 
     <Grid>
 
-        <!-- ── State 1: Idle Handle (72 × 5 px Top / 5 × 72 px Edge) ──────── -->
+        <!-- ── State 1: Idle Handle (72 × 8 px Top / 8 × 72 px Edge) ──────── -->
         <Border x:Name="IdlePill"
-                Background="#FF1A1C20"
-                CornerRadius="3"
+                Background="#E61A1C20"
+                CornerRadius="4"
+                Cursor="Hand"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"/>
 
-        <!-- ── State 2: CollapsedHover Capsule (240 × 34 px) ──────────────── -->
+        <!-- ── State 2: CollapsedHover Capsule (240 × 34 px / 320 × 34 px on Toast) ── -->
         <Border x:Name="HoverCapsule"
-                Background="#B31A1C20"
+                Background="#EE1A1C20"
                 CornerRadius="17"
-                BorderBrush="#24FFFFFF"
+                BorderBrush="#38FFFFFF"
                 BorderThickness="1"
+                Cursor="Hand"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
                 Visibility="Collapsed">
-            <StackPanel Orientation="Horizontal"
-                        VerticalAlignment="Center"
-                        HorizontalAlignment="Center">
-                <!-- Status dot -->
-                <Ellipse Width="6" Height="6"
-                         Fill="#4CAF50"
-                         VerticalAlignment="Center"
-                         Margin="0,0,8,0"/>
-                <!-- Live clock -->
-                <TextBlock Text="{Binding ClockText}"
-                           Foreground="White"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-                <!-- Date divider -->
-                <TextBlock Text="•"
-                           Foreground="#60FFFFFF"
-                           Margin="8,0"
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding DateText}"
-                           Foreground="#A0FFFFFF"
-                           FontSize="12"
-                           VerticalAlignment="Center"/>
-                <!-- Mini playing indicator if media is active -->
-                <TextBlock Text=" 🎵"
-                           Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"
-                           Foreground="#4CAF50"
-                           FontSize="11"
-                           VerticalAlignment="Center"
-                           Margin="4,0,0,0"/>
-            </StackPanel>
+            <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
+
+                <!-- 1. Default Clock & Date Capsule -->
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMediaToastActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsVolumeToastActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsPowerToastActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <!-- Status dot -->
+                    <Ellipse Width="6" Height="6"
+                             Fill="#4CAF50"
+                             VerticalAlignment="Center"
+                             Margin="0,0,8,0"/>
+                    <!-- Live clock -->
+                    <TextBlock Text="{Binding ClockText}"
+                               Foreground="White"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
+                    <!-- Date divider -->
+                    <TextBlock Text="•"
+                               Foreground="#60FFFFFF"
+                               Margin="8,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DateText}"
+                               Foreground="#A0FFFFFF"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+                    <!-- Mini playing indicator if media is active -->
+                    <TextBlock Text=" 🎵"
+                               Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"
+                               Foreground="#4CAF50"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Margin="4,0,0,0"/>
+                    <!-- Live Activity Stopwatch indicator if stopwatch is running -->
+                    <Border Visibility="{Binding IsStopwatchRunning, Converter={StaticResource BoolToVis}}"
+                            Background="#25FF9800" BorderBrush="#50FF9800" BorderThickness="1"
+                            CornerRadius="6" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⏱ " Foreground="#FFB74D" FontSize="10" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding StopwatchText}" Foreground="#FFE082" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <!-- Mini staged files indicator if shelf has items -->
+                    <TextBlock Text="{Binding ShelfCountText}"
+                               Visibility="{Binding HasStagedFiles, Converter={StaticResource BoolToVis}}"
+                               Foreground="#2196F3"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Margin="6,0,0,0"/>
+                </StackPanel>
+
+                <!-- 2. Dynamic Island Music Toast Capsule -->
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Margin="8,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsMediaToastActive}" Value="True"/>
+                                        <Condition Binding="{Binding IsVolumeToastActive}" Value="False"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <!-- Album Art Thumbnail -->
+                    <Border Width="22" Height="22"
+                            CornerRadius="5"
+                            Background="#30FFFFFF"
+                            BorderBrush="#40FFFFFF"
+                            BorderThickness="1"
+                            ClipToBounds="True"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0">
+                        <Grid>
+                            <TextBlock Text="🎵" FontSize="11" Foreground="#80FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Image Source="{Binding MediaThumbnail}" Stretch="UniformToFill"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Track Title & Artist -->
+                    <TextBlock Text="{Binding MediaTitle}"
+                               Foreground="White"
+                               FontSize="12"
+                               FontWeight="Bold"
+                               MaxWidth="140"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text=" - " Foreground="#60FFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding MediaArtist}"
+                               Foreground="#B0FFFFFF"
+                               FontSize="11"
+                               MaxWidth="90"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Waveform indicator -->
+                    <TextBlock Text=" 🎶" Foreground="#4CAF50" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                </StackPanel>
+
+                <!-- 3. Dynamic Island Volume HUD -->
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Margin="8,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsVolumeToastActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <!-- Volume icon -->
+                    <TextBlock FontSize="12" Foreground="White" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="🔊"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                        <Setter Property="Text" Value="🔇"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Percentage -->
+                    <TextBlock Text="{Binding MasterVolume, StringFormat='{}{0:F0}%'}"
+                               Foreground="White" FontSize="12" FontWeight="Bold"
+                               Width="38" Margin="6,0,4,0" VerticalAlignment="Center"/>
+
+                    <!-- Progress bar -->
+                    <ProgressBar Value="{Binding MasterVolume}" Maximum="100"
+                                 Width="120" Height="4"
+                                 Foreground="#2196F3" Background="#30FFFFFF" BorderThickness="0"
+                                 VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- 4. Dynamic Island Battery & Power Toast Capsule -->
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            Margin="8,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPowerToastActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+
+                    <TextBlock Text="{Binding PowerToastIcon}" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding PowerToastTitle}" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Text=" • " Foreground="#60FFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding PowerToastDetail}" Foreground="#A0FFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
+
+            </Grid>
         </Border>
 
         <!-- ── State 3: PeekExpanded Hub (540 × 240 px) ───────────────────── -->
         <Border x:Name="ExpandedHub"
-                Background="#D91A1C20"
-                CornerRadius="16"
-                BorderBrush="#24FFFFFF"
+                Background="#F01A1C20"
+                CornerRadius="20"
+                BorderBrush="#38FFFFFF"
                 BorderThickness="1"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch"
@@ -114,7 +273,7 @@
                             Padding="0">
 
                     <!-- Tab 1: Media -->
-                    <TabItem Header="Media" Foreground="White" FontSize="13">
+                    <TabItem Header="🎵 Media" Foreground="White" FontSize="13">
                         <Grid Margin="4,12,4,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -143,16 +302,65 @@
 
                             <!-- Track Info & Controls -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <!-- Audio Device Switcher Button -->
+                                <Button Style="{StaticResource NotchIconBtn}"
+                                        Command="{Binding ToggleAudioDeviceMenuCommand}"
+                                        Padding="0" HorizontalAlignment="Left" Margin="0,0,0,4">
+                                    <Border Background="#1AFFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="6" Padding="6,2">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🎧 " FontSize="10" Foreground="#4CAF50"/>
+                                            <TextBlock Text="{Binding ActiveAudioDeviceName}" FontSize="10" Foreground="#D0FFFFFF" MaxWidth="170" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text=" ▾" FontSize="9" Foreground="#80FFFFFF" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+
+                                <!-- Audio Device Selector Dropdown -->
+                                <Border Visibility="{Binding IsAudioDeviceMenuOpen, Converter={StaticResource BoolToVis}}"
+                                        Background="#F51A1C20" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="8"
+                                        Padding="4" Margin="0,0,0,4" HorizontalAlignment="Left" MaxWidth="280">
+                                    <StackPanel>
+                                        <TextBlock Text="Select Playback Device" Foreground="#70FFFFFF" FontSize="10" FontWeight="SemiBold" Margin="4,2,4,4"/>
+                                        <ItemsControl ItemsSource="{Binding AudioDevices}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Style="{StaticResource NotchIconBtn}"
+                                                            Command="{Binding DataContext.SelectAudioDeviceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            HorizontalContentAlignment="Stretch"
+                                                            Padding="6,3" Margin="0,1">
+                                                        <DockPanel LastChildFill="True">
+                                                            <TextBlock Text="✓" Foreground="#4CAF50" FontWeight="Bold" FontSize="11" Margin="0,0,6,0"
+                                                                       Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
+                                                            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                        </DockPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
                                 <TextBlock Text="{Binding MediaTitle}"
                                            Foreground="White"
-                                           FontSize="16"
+                                           FontSize="15"
                                            FontWeight="Bold"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Text="{Binding MediaArtist}"
                                            Foreground="#A0FFFFFF"
-                                           FontSize="13"
-                                           Margin="0,4,0,12"
+                                           FontSize="12"
+                                           Margin="0,2,0,6"
                                            TextTrimming="CharacterEllipsis"/>
+
+                                <!-- Track Timeline Seek Bar -->
+                                <DockPanel Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding MediaPositionText}" Foreground="#80FFFFFF" FontSize="10" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="{Binding MediaDurationText}" Foreground="#80FFFFFF" FontSize="10" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                    <ProgressBar Value="{Binding MediaProgressPercent}" Minimum="0" Maximum="100"
+                                                 Height="5" Foreground="#4CAF50" Background="#30FFFFFF" BorderThickness="0"
+                                                 Cursor="Hand" PreviewMouseLeftButtonDown="OnTimelineProgressBarClick"
+                                                 VerticalAlignment="Center"/>
+                                </DockPanel>
 
                                 <!-- Controls -->
                                 <StackPanel Orientation="Horizontal">
@@ -161,9 +369,8 @@
                                             Content="⏮" FontSize="18" Padding="12,6"/>
                                     <Button Style="{StaticResource NotchIconBtn}"
                                             Command="{Binding PlayPauseCommand}"
-                                            FontSize="20" Padding="16,6">
-                                        <TextBlock Text="{Binding IsMediaPlaying, Converter={x:Null}}"
-                                                   Foreground="White">
+                                            Padding="16,6">
+                                        <TextBlock Foreground="White" FontSize="20">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Text" Value="▶"/>
@@ -184,33 +391,41 @@
                         </Grid>
                     </TabItem>
 
-                    <!-- Tab 2: Shelf -->
-                    <TabItem Header="Shelf" Foreground="White" FontSize="13">
-                        <Grid Margin="4,8,4,4">
+                    <!-- Tab 2: Shelf & Clipboard -->
+                    <TabItem Header="📁 Shelf" Foreground="White" FontSize="13">
+                        <Grid Margin="4,6,4,4">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <!-- Shelf Actions -->
+                            <!-- Sub-header segment: Files vs Clipboard -->
                             <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                                <TextBlock Text="{Binding ShelfItems.Count, StringFormat='Staged Files ({0})'}"
-                                           Foreground="#80FFFFFF"
-                                           FontSize="12"
-                                           VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                    <RadioButton Content="📁 Files"
+                                                 Foreground="White" FontSize="11"
+                                                 Checked="OnShelfSubTabFilesChecked" x:Name="RadioSubTabFiles"
+                                                 IsChecked="True"
+                                                 Margin="0,0,8,0"/>
+                                    <RadioButton Content="📋 Clipboard"
+                                                 Foreground="White" FontSize="11"
+                                                 Checked="OnShelfSubTabClipboardChecked" x:Name="RadioSubTabClipboard"/>
+                                </StackPanel>
+
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                     <Button Style="{StaticResource NotchIconBtn}"
+                                            Command="{Binding CaptureScreenCommand}"
+                                            Content="📸 Snip" FontSize="11" ToolTip="Capture Screen to Shelf"/>
+                                    <Button Style="{StaticResource NotchIconBtn}"
                                             Command="{Binding CopyShelfPathsCommand}"
-                                            Content="📋 Copy Paths"
-                                            FontSize="11"/>
+                                            Content="📋 Copy Paths" FontSize="11" Margin="4,0,0,0"/>
                                     <Button Style="{StaticResource NotchIconBtn}"
                                             Command="{Binding ClearShelfCommand}"
-                                            Content="🗑 Clear"
-                                            FontSize="11" Margin="6,0,0,0"/>
+                                            Content="🗑 Clear" FontSize="11" Margin="4,0,0,0"/>
                                 </StackPanel>
                             </DockPanel>
 
-                            <!-- File List / Drag Out Target -->
+                            <!-- Content Area -->
                             <Border Grid.Row="1"
                                     Background="#15FFFFFF"
                                     BorderBrush="#20FFFFFF"
@@ -218,57 +433,120 @@
                                     CornerRadius="8"
                                     Padding="4">
                                 <Grid>
-                                    <!-- Empty state -->
-                                    <TextBlock Text="Drag and drop files here to stage them"
-                                               Foreground="#50FFFFFF"
-                                               FontSize="12"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ShelfItems.Count}" Value="0">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                    <!-- VIEW 1: Staged Files -->
+                                    <Grid x:Name="PanelStagedFiles">
+                                        <!-- Empty state -->
+                                        <TextBlock Text="Drag and drop files here or click 📸 Snip"
+                                                   Foreground="#50FFFFFF"
+                                                   FontSize="12"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShelfItems.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
 
-                                    <!-- Files list -->
-                                    <ListBox ItemsSource="{Binding ShelfItems}"
-                                             Background="Transparent"
-                                             BorderThickness="0"
-                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                             PreviewMouseMove="OnShelfListPreviewMouseMove"
-                                             PreviewMouseLeftButtonDown="OnShelfListPreviewMouseLeftButtonDown">
-                                        <ListBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <DockPanel Margin="2,3" LastChildFill="True">
-                                                    <Button Style="{StaticResource NotchIconBtn}"
-                                                            Command="{Binding DataContext.RemoveShelfItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}"
-                                                            DockPanel.Dock="Right"
-                                                            Content="✕" FontSize="10" Foreground="#60FFFFFF"
-                                                            Padding="4,2"/>
-                                                    <Image Source="{Binding Icon}" Width="16" Height="16" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="{Binding FormattedSize}" DockPanel.Dock="Right"
-                                                               Foreground="#60FFFFFF" FontSize="11" Margin="6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding FileName}" Foreground="White" FontSize="12"
-                                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                </DockPanel>
-                                            </DataTemplate>
-                                        </ListBox.ItemTemplate>
-                                    </ListBox>
+                                        <!-- Files list -->
+                                        <ListBox ItemsSource="{Binding ShelfItems}"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 PreviewMouseMove="OnShelfListPreviewMouseMove"
+                                                 PreviewMouseLeftButtonDown="OnShelfListPreviewMouseLeftButtonDown">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#12FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" CornerRadius="6" Padding="6,3" Margin="0,2">
+                                                        <DockPanel LastChildFill="True">
+                                                            <Button Style="{StaticResource NotchIconBtn}"
+                                                                    Command="{Binding DataContext.RemoveShelfItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    DockPanel.Dock="Right"
+                                                                    Content="✕" FontSize="10" Foreground="#60FFFFFF"
+                                                                    Padding="4,2"/>
+                                                            <TextBlock Text="{Binding FormattedSize}" DockPanel.Dock="Right"
+                                                                       Foreground="#60FFFFFF" FontSize="11" Margin="6,0" VerticalAlignment="Center"/>
+                                                            <Border Width="18" Height="18" CornerRadius="4" Background="#15FFFFFF" Margin="0,0,8,0" ClipToBounds="True" VerticalAlignment="Center">
+                                                                <Grid>
+                                                                    <TextBlock Text="📄" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    <Image Source="{Binding Icon}" Stretch="UniformToFill"/>
+                                                                </Grid>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding FileName}" Foreground="White" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        </DockPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+
+                                    <!-- VIEW 2: Clipboard History -->
+                                    <Grid x:Name="PanelClipboard" Visibility="Collapsed">
+                                        <!-- Empty state -->
+                                        <TextBlock Text="No recent clipboard snippets"
+                                                   Foreground="#50FFFFFF"
+                                                   FontSize="12"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ClipboardHistory.Count}" Value="0">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Clipboard list -->
+                                        <ListBox ItemsSource="{Binding ClipboardHistory}"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="2,3" LastChildFill="True">
+                                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                                Command="{Binding DataContext.RemoveClipboardItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                DockPanel.Dock="Right"
+                                                                Content="✕" FontSize="10" Foreground="#60FFFFFF" Padding="4,2"/>
+                                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                                Command="{Binding DataContext.TogglePinClipboardItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                DockPanel.Dock="Right"
+                                                                Content="📌" FontSize="10" Margin="2,0" Padding="4,2"/>
+                                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                                Command="{Binding DataContext.CopyClipboardItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                HorizontalAlignment="Left"
+                                                                Cursor="Hand">
+                                                            <TextBlock Text="{Binding Preview}" Foreground="White" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                        </Button>
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
                                 </Grid>
                             </Border>
                         </Grid>
                     </TabItem>
 
                     <!-- Tab 3: Resources -->
-                    <TabItem Header="Resources" Foreground="White" FontSize="13">
+                    <TabItem Header="⚡ Resources" Foreground="White" FontSize="13">
                         <UniformGrid Columns="3" Margin="4,16,4,4">
                             <!-- CPU -->
                             <Border Background="#15FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Margin="4" Padding="10">
@@ -304,33 +582,76 @@
                     </TabItem>
 
                     <!-- Tab 4: Tools -->
-                    <TabItem Header="Tools" Foreground="White" FontSize="13">
-                        <UniformGrid Columns="4" Margin="4,16,4,4">
-                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenTaskManagerCommand}" Padding="8,12">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="⚡" FontSize="24" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Task Mgr" Foreground="White" FontSize="11" Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenSnippingToolCommand}" Padding="8,12">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="✂" FontSize="24" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Snipping" Foreground="White" FontSize="11" Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenNotepadCommand}" Padding="8,12">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="📝" FontSize="24" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Notepad" Foreground="White" FontSize="11" Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenCalculatorCommand}" Padding="8,12">
-                                <StackPanel HorizontalAlignment="Center">
-                                    <TextBlock Text="🧮" FontSize="24" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Calculator" Foreground="White" FontSize="11" Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </Button>
-                        </UniformGrid>
+                    <TabItem Header="🛠 Tools" Foreground="White" FontSize="13">
+                        <Grid Margin="4,10,4,4">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Stopwatch Card -->
+                            <Border Grid.Row="0"
+                                    Background="#15FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1"
+                                    CornerRadius="10" Padding="12,8" Margin="0,0,0,8">
+                                <DockPanel LastChildFill="True">
+                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                Command="{Binding ToggleStopwatchCommand}"
+                                                FontSize="13" Padding="10,4">
+                                            <TextBlock Foreground="White">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="▶ Start"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsStopwatchRunning}" Value="True">
+                                                                <Setter Property="Text" Value="⏸ Pause"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button>
+                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                Command="{Binding ResetStopwatchCommand}"
+                                                Content="↺ Reset"
+                                                FontSize="13" Padding="8,4" Margin="6,0,0,0"/>
+                                    </StackPanel>
+
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="Sprint Timer" Foreground="#80FFFFFF" FontSize="11"/>
+                                        <TextBlock Text="{Binding StopwatchText}" Foreground="White" FontSize="20" FontWeight="Bold"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- Quick Launchers -->
+                            <UniformGrid Grid.Row="1" Columns="4" Margin="0,2,0,0">
+                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenTaskManagerCommand}" Padding="6,8">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="⚡" FontSize="20" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Task Mgr" Foreground="White" FontSize="11" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenSnippingToolCommand}" Padding="6,8">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="✂" FontSize="20" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Snipping" Foreground="White" FontSize="11" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenNotepadCommand}" Padding="6,8">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="📝" FontSize="20" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Notepad" Foreground="White" FontSize="11" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding OpenCalculatorCommand}" Padding="6,8">
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="🧮" FontSize="20" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Calculator" Foreground="White" FontSize="11" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </Button>
+                            </UniformGrid>
+                        </Grid>
                     </TabItem>
                 </TabControl>
 
@@ -346,7 +667,7 @@
                                 Command="{Binding ToggleMuteCommand}"
                                 DockPanel.Dock="Left"
                                 Padding="6,2">
-                            <TextBlock Text="{Binding IsMuted, Converter={x:Null}}" Foreground="White">
+                            <TextBlock Foreground="White" FontSize="15">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="🔊"/>
@@ -371,11 +692,17 @@
                         <!-- Right Quick Tools -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button Style="{StaticResource NotchIconBtn}"
+                                    Command="{Binding CaptureScreenCommand}"
+                                    ToolTip="Screen Snip to Shelf" Content="📸"/>
+                            <Button Style="{StaticResource NotchIconBtn}"
                                     Command="{Binding OpenTaskManagerCommand}"
                                     ToolTip="Task Manager" Content="⚡"/>
                             <Button Style="{StaticResource NotchIconBtn}"
                                     Command="{Binding OpenSnippingToolCommand}"
                                     ToolTip="Snipping Tool" Content="✂"/>
+                            <Button Style="{StaticResource NotchIconBtn}"
+                                    Command="{Binding OpenSettingsCommand}"
+                                    ToolTip="Settings" Content="⚙"/>
                         </StackPanel>
                     </DockPanel>
                 </Border>

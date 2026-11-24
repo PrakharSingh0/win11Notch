@@ -11,65 +11,151 @@ namespace Win11Notch.ViewModels;
 
 /// <summary>
 /// Master ViewModel for the NotchWindow overlay.
-/// Coordinates media controls, drop shelf, resource monitoring, and quick tools.
+/// Coordinates media controls, drop shelf, clipboard history, screen capture,
+/// hardware volume HUD, media timeline, resource monitoring, tools widgets, and settings.
 /// </summary>
 public sealed partial class NotchViewModel : ObservableObject
 {
-    private readonly NotchStateMachine     _stateMachine;
-    private readonly MediaService           _mediaService;
-    private readonly ShelfService           _shelfService;
-    private readonly AudioService           _audioService;
-    private readonly ResourceMonitorService _resourceMonitor;
+    private readonly NotchStateMachine      _stateMachine;
+    private readonly MediaService            _mediaService;
+    private readonly ShelfService            _shelfService;
+    private readonly AudioService            _audioService;
+    private readonly ResourceMonitorService  _resourceMonitor;
+    private readonly ClipboardService        _clipboardService;
+    private readonly ScreenCaptureService    _screenCaptureService;
 
     [ObservableProperty] private NotchState   _currentState       = NotchState.Idle;
     [ObservableProperty] private string       _clockText          = string.Empty;
     [ObservableProperty] private string       _dateText           = string.Empty;
     [ObservableProperty] private int          _selectedTabIndex   = 0;
+    [ObservableProperty] private int          _shelfSubTabIndex   = 0; // 0: Files, 1: Clipboard
 
     // Media properties
-    [ObservableProperty] private string       _mediaTitle         = "No Media Playing";
-    [ObservableProperty] private string       _mediaArtist        = string.Empty;
+    [ObservableProperty] private string       _mediaTitle             = "No Media Playing";
+    [ObservableProperty] private string       _mediaArtist            = string.Empty;
     [ObservableProperty] private bool         _isMediaPlaying;
     [ObservableProperty] private bool         _hasMedia;
     [ObservableProperty] private ImageSource? _mediaThumbnail;
+    [ObservableProperty] private bool         _isMediaToastActive;
+    [ObservableProperty] private string       _mediaPositionText      = "00:00";
+    [ObservableProperty] private string       _mediaDurationText      = "00:00";
+    [ObservableProperty] private double       _mediaProgressFraction;
+    [ObservableProperty] private double       _mediaProgressPercent;
+
+    public event Action<bool>? MediaToastActiveChanged;
+    partial void OnIsMediaToastActiveChanged(bool value) => MediaToastActiveChanged?.Invoke(value);
+
+    // Audio properties & Volume HUD
+    [ObservableProperty] private float        _masterVolume           = 50f;
+    [ObservableProperty] private bool         _isMuted;
+    [ObservableProperty] private bool         _isVolumeToastActive;
+    [ObservableProperty] private string       _activeAudioDeviceName  = "Default Playback Device";
+    [ObservableProperty] private bool         _isAudioDeviceMenuOpen;
+    public ObservableCollection<AudioDeviceItem> AudioDevices { get; } = new();
+    private bool                              _isSyncingVolume;
+
+    public event Action<bool>? VolumeToastActiveChanged;
+    partial void OnIsVolumeToastActiveChanged(bool value) => VolumeToastActiveChanged?.Invoke(value);
+
+    // Power & Battery Toast properties
+    [ObservableProperty] private bool         _isPowerToastActive;
+    [ObservableProperty] private string       _powerToastIcon         = "⚡";
+    [ObservableProperty] private string       _powerToastTitle        = "Charger Connected";
+    [ObservableProperty] private string       _powerToastDetail       = "85%";
+    public event Action<bool>? PowerToastActiveChanged;
+    partial void OnIsPowerToastActiveChanged(bool value) => PowerToastActiveChanged?.Invoke(value);
 
     // Resource properties
     [ObservableProperty] private int          _cpuPercent;
     [ObservableProperty] private int          _memoryPercent;
-    [ObservableProperty] private int          _batteryPercent     = 100;
+    [ObservableProperty] private int          _batteryPercent         = 100;
     [ObservableProperty] private bool         _isCharging;
 
-    // Audio properties
-    [ObservableProperty] private float        _masterVolume       = 50f;
-    [ObservableProperty] private bool         _isMuted;
+    // Shelf badge
+    [ObservableProperty] private bool         _hasStagedFiles;
+    [ObservableProperty] private string       _shelfCountText         = string.Empty;
 
-    // Shelf items collection
-    public ObservableCollection<ShelfItem> ShelfItems => _shelfService.Items;
+    // Stopwatch tool
+    [ObservableProperty] private string       _stopwatchText          = "00:00.0";
+    [ObservableProperty] private bool         _isStopwatchRunning;
+    private readonly Stopwatch                _stopwatch              = new();
+    private DispatcherTimer?                  _stopwatchTimer;
+
+    // Events
+    public event Action? OpenSettingsRequested;
+
+    // Collections
+    public ObservableCollection<ShelfItem>     ShelfItems       => _shelfService.Items;
+    public ObservableCollection<ClipboardItem> ClipboardHistory => _clipboardService.History;
 
     private DispatcherTimer? _clockTimer;
+    private DispatcherTimer? _timelineTimer;
 
     public NotchViewModel(
-        NotchStateMachine     stateMachine,
-        MediaService           mediaService,
-        ShelfService           shelfService,
-        AudioService           audioService,
-        ResourceMonitorService resourceMonitor)
+        NotchStateMachine      stateMachine,
+        MediaService            mediaService,
+        ShelfService            shelfService,
+        AudioService            audioService,
+        ResourceMonitorService  resourceMonitor,
+        ClipboardService        clipboardService,
+        ScreenCaptureService    screenCaptureService)
     {
-        _stateMachine     = stateMachine;
-        _mediaService     = mediaService;
-        _shelfService     = shelfService;
-        _audioService     = audioService;
-        _resourceMonitor  = resourceMonitor;
+        _stateMachine          = stateMachine;
+        _mediaService          = mediaService;
+        _shelfService          = shelfService;
+        _audioService          = audioService;
+        _resourceMonitor       = resourceMonitor;
+        _clipboardService      = clipboardService;
+        _screenCaptureService  = screenCaptureService;
 
-        // Wire media updates
-        _mediaService.MediaChanged += OnMediaChanged;
+        // Wire media updates & timeline
+        _mediaService.MediaChanged    += OnMediaChanged;
+        _mediaService.TimelineChanged += OnTimelineChanged;
 
         // Wire resource stats
         _resourceMonitor.StatsUpdated += OnResourceStatsUpdated;
 
-        // Sync initial volume
-        _masterVolume = _audioService.GetMasterVolume() * 100f;
-        _isMuted      = _audioService.GetMute();
+        // Wire shelf changes
+        _shelfService.Items.CollectionChanged += (_, _) =>
+        {
+            HasStagedFiles = _shelfService.Items.Count > 0;
+            ShelfCountText = _shelfService.Items.Count > 0 ? $"📦 {_shelfService.Items.Count}" : string.Empty;
+        };
+
+        // Sync initial volume and audio device
+        _isSyncingVolume = true;
+        try
+        {
+            _masterVolume = (float)Math.Round(_audioService.GetMasterVolume() * 100f);
+            _isMuted      = _audioService.GetMute();
+        }
+        finally
+        {
+            _isSyncingVolume = false;
+        }
+
+        _activeAudioDeviceName = _audioService.ActiveDeviceName;
+
+        _audioService.ActiveDeviceChanged += name =>
+        {
+            ActiveAudioDeviceName = name;
+            RefreshAudioDevices();
+        };
+
+        _audioService.VolumeChanged += (vol, muted, _) =>
+        {
+            UpdateVolumeFromDevice(vol * 100f, muted);
+        };
+
+        // Timeline ticking timer (only active while PeekExpanded is open and music is playing)
+        _timelineTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _timelineTimer.Tick += (_, _) =>
+        {
+            if (CurrentState == NotchState.PeekExpanded && IsMediaPlaying)
+            {
+                _mediaService.UpdateTimeline();
+            }
+        };
 
         // State changes
         _stateMachine.StateChanged += (_, state) =>
@@ -81,17 +167,39 @@ public sealed partial class NotchViewModel : ObservableObject
             else
                 StopClock();
 
-            // Resource monitoring runs ONLY while Peek is expanded to keep idle CPU at 0%
+            // Resource monitoring & timeline updates run ONLY while Peek is expanded
             if (state == NotchState.PeekExpanded)
             {
                 _resourceMonitor.StartMonitoring();
+                _audioService.RefreshActiveDevice();
+                ActiveAudioDeviceName = _audioService.ActiveDeviceName;
                 _ = _mediaService.RefreshMediaInfoAsync();
+
+                if (IsMediaPlaying)
+                {
+                    _timelineTimer.Start();
+                }
             }
             else
             {
                 _resourceMonitor.StopMonitoring();
+                _timelineTimer.Stop();
             }
         };
+    }
+
+    public void UpdateVolumeFromDevice(float volume, bool isMuted)
+    {
+        _isSyncingVolume = true;
+        try
+        {
+            MasterVolume = (float)Math.Round(volume);
+            IsMuted      = isMuted;
+        }
+        finally
+        {
+            _isSyncingVolume = false;
+        }
     }
 
     private void OnMediaChanged()
@@ -101,6 +209,24 @@ public sealed partial class NotchViewModel : ObservableObject
         IsMediaPlaying  = _mediaService.IsPlaying;
         HasMedia        = _mediaService.HasMedia;
         MediaThumbnail  = _mediaService.Thumbnail;
+        OnTimelineChanged();
+
+        if (CurrentState == NotchState.PeekExpanded && IsMediaPlaying)
+        {
+            _timelineTimer?.Start();
+        }
+        else if (!IsMediaPlaying)
+        {
+            _timelineTimer?.Stop();
+        }
+    }
+
+    private void OnTimelineChanged()
+    {
+        MediaPositionText     = _mediaService.PositionText;
+        MediaDurationText     = _mediaService.DurationText;
+        MediaProgressFraction = _mediaService.ProgressFraction;
+        MediaProgressPercent  = Math.Clamp(_mediaService.ProgressFraction * 100.0, 0.0, 100.0);
     }
 
     private void OnResourceStatsUpdated()
@@ -116,12 +242,30 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand] private async Task PlayPause() => await _mediaService.TogglePlayPauseAsync();
     [RelayCommand] private async Task NextTrack() => await _mediaService.NextTrackAsync();
     [RelayCommand] private async Task PreviousTrack() => await _mediaService.PreviousTrackAsync();
+    [RelayCommand] private async Task SeekMediaFraction(double fraction) => await _mediaService.SeekToFractionAsync(fraction);
 
     // ── Shelf commands ────────────────────────────────────────────────────────
 
     [RelayCommand] private void RemoveShelfItem(ShelfItem item) => _shelfService.RemoveItem(item);
     [RelayCommand] private void ClearShelf() => _shelfService.Clear();
     [RelayCommand] private void CopyShelfPaths() => _shelfService.CopyPathsToClipboard();
+
+    // ── Clipboard commands ────────────────────────────────────────────────────
+
+    [RelayCommand] private void CopyClipboardItem(ClipboardItem item) => _clipboardService.CopyItem(item);
+    [RelayCommand] private void TogglePinClipboardItem(ClipboardItem item) => _clipboardService.TogglePin(item);
+    [RelayCommand] private void RemoveClipboardItem(ClipboardItem item) => _clipboardService.Remove(item);
+    [RelayCommand] private void ClearClipboardHistory() => _clipboardService.ClearUnpinned();
+
+    // ── Screen capture command ────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void CaptureScreen()
+    {
+        _screenCaptureService.CaptureScreenToShelf();
+        SelectedTabIndex = 1; // Open Shelf tab
+        ShelfSubTabIndex = 0; // Show Staged Files
+    }
 
     // ── Audio commands ────────────────────────────────────────────────────────
 
@@ -134,10 +278,79 @@ public sealed partial class NotchViewModel : ObservableObject
 
     partial void OnMasterVolumeChanged(float value)
     {
-        _audioService.SetMasterVolume(value / 100f);
+        if (!_isSyncingVolume)
+        {
+            _audioService.SetMasterVolume(value / 100f);
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleAudioDeviceMenu()
+    {
+        IsAudioDeviceMenuOpen = !IsAudioDeviceMenuOpen;
+        if (IsAudioDeviceMenuOpen)
+        {
+            RefreshAudioDevices();
+        }
+    }
+
+    [RelayCommand]
+    private void SelectAudioDevice(AudioDeviceItem? item)
+    {
+        if (item != null)
+        {
+            _audioService.SetDefaultPlaybackDevice(item.Id);
+            IsAudioDeviceMenuOpen = false;
+        }
+    }
+
+    public void RefreshAudioDevices()
+    {
+        AudioDevices.Clear();
+        var devices = _audioService.GetActivePlaybackDevices();
+        foreach (var d in devices)
+        {
+            AudioDevices.Add(d);
+        }
+    }
+
+    // ── Stopwatch widget ──────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void ToggleStopwatch()
+    {
+        if (_stopwatch.IsRunning)
+        {
+            _stopwatch.Stop();
+            _stopwatchTimer?.Stop();
+            IsStopwatchRunning = false;
+        }
+        else
+        {
+            _stopwatch.Start();
+            IsStopwatchRunning = true;
+            _stopwatchTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+            _stopwatchTimer.Tick += (_, _) =>
+            {
+                var ts = _stopwatch.Elapsed;
+                StopwatchText = $"{ts.Minutes:D2}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
+            };
+            _stopwatchTimer.Start();
+        }
+    }
+
+    [RelayCommand]
+    private void ResetStopwatch()
+    {
+        _stopwatch.Reset();
+        _stopwatchTimer?.Stop();
+        IsStopwatchRunning = false;
+        StopwatchText = "00:00.0";
     }
 
     // ── Quick tool commands ───────────────────────────────────────────────────
+
+    [RelayCommand] private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     [RelayCommand]
     private static void OpenTaskManager() =>

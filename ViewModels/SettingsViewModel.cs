@@ -1,0 +1,118 @@
+using System.Diagnostics;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Win11Notch.Core.Settings;
+using Win11Notch.Services;
+
+namespace Win11Notch.ViewModels;
+
+/// <summary>
+/// ViewModel for the Fluent Settings dialog.
+/// Supports real-time live synchronization with the overlay window.
+/// </summary>
+public sealed partial class SettingsViewModel : ObservableObject
+{
+    private readonly SettingsService _settingsService;
+    private readonly StartupService  _startupService;
+    private bool                      _isLoading;
+
+    [ObservableProperty] private string _dockEdge                     = "Top";
+    [ObservableProperty] private int    _idleOpacityPercent            = 20;
+    [ObservableProperty] private int    _acrylicTintPercent            = 70;
+    [ObservableProperty] private int    _hoverDwellMs                 = 100;
+    [ObservableProperty] private int    _exitGraceMs                  = 300;
+    [ObservableProperty] private bool   _launchAtStartup;
+    [ObservableProperty] private bool   _autoExpandOnDrag             = true;
+    [ObservableProperty] private bool   _showMediaIslandNotifications = true;
+    [ObservableProperty] private string _hotkeyPreset                 = "Alt+Space";
+    [ObservableProperty] private string _currentMemoryText            = "35.0 MB";
+
+    public event Action? SettingsChanged;
+
+    public SettingsViewModel(SettingsService settingsService, StartupService startupService)
+    {
+        _settingsService = settingsService;
+        _startupService  = startupService;
+
+        LoadFromSettings();
+    }
+
+    public void RefreshDiagnostics()
+    {
+        long bytes = Process.GetCurrentProcess().WorkingSet64;
+        CurrentMemoryText = $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private void LoadFromSettings()
+    {
+        _isLoading = true;
+        try
+        {
+            var s = _settingsService.Current;
+            DockEdge                     = s.DockEdge;
+            IdleOpacityPercent           = (int)Math.Round(s.IdleOpacity * 100);
+            AcrylicTintPercent           = (int)Math.Round(s.AcrylicTintOpacity * 100);
+            HoverDwellMs                 = s.HoverDwellMs;
+            ExitGraceMs                  = s.ExitGraceMs;
+            AutoExpandOnDrag             = s.AutoExpandOnDrag;
+            ShowMediaIslandNotifications = s.ShowMediaIslandNotifications;
+            HotkeyPreset                 = s.HotkeyPreset;
+            LaunchAtStartup              = _startupService.IsStartupEnabled();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+
+        RefreshDiagnostics();
+    }
+
+    partial void OnDockEdgeChanged(string value)                     => ApplyAndSave();
+    partial void OnIdleOpacityPercentChanged(int value)               => ApplyAndSave();
+    partial void OnAcrylicTintPercentChanged(int value)               => ApplyAndSave();
+    partial void OnHoverDwellMsChanged(int value)                     => ApplyAndSave();
+    partial void OnExitGraceMsChanged(int value)                      => ApplyAndSave();
+    partial void OnAutoExpandOnDragChanged(bool value)                => ApplyAndSave();
+    partial void OnShowMediaIslandNotificationsChanged(bool value)        => ApplyAndSave();
+    partial void OnHotkeyPresetChanged(string value)                 => ApplyAndSave();
+
+    partial void OnLaunchAtStartupChanged(bool value)
+    {
+        if (_isLoading) return;
+        _startupService.SetStartupEnabled(value);
+        _settingsService.Current.LaunchAtStartup = value;
+        _ = _settingsService.SaveAsync();
+    }
+
+    private void ApplyAndSave()
+    {
+        if (_isLoading) return;
+
+        var s = _settingsService.Current;
+        s.DockEdge                     = DockEdge;
+        s.IdleOpacity                  = IdleOpacityPercent / 100.0;
+        s.AcrylicTintOpacity           = AcrylicTintPercent / 100.0;
+        s.HoverDwellMs                 = HoverDwellMs;
+        s.ExitGraceMs                  = ExitGraceMs;
+        s.AutoExpandOnDrag             = AutoExpandOnDrag;
+        s.ShowMediaIslandNotifications = ShowMediaIslandNotifications;
+        s.HotkeyPreset                 = HotkeyPreset;
+
+        _ = _settingsService.SaveAsync();
+        SettingsChanged?.Invoke();
+    }
+
+    [RelayCommand]
+    private void ResetDefaults()
+    {
+        DockEdge                     = "Top";
+        IdleOpacityPercent           = 20;
+        AcrylicTintPercent           = 70;
+        HoverDwellMs                 = 100;
+        ExitGraceMs                  = 300;
+        AutoExpandOnDrag             = true;
+        ShowMediaIslandNotifications = true;
+        HotkeyPreset                 = "Alt+Space";
+        LaunchAtStartup              = false;
+    }
+}

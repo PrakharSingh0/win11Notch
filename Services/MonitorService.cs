@@ -5,20 +5,27 @@ namespace Win11Notch.Services;
 
 /// <summary>
 /// Provides screen-geometry helpers for notch window positioning across Top, Left, and Right docking edges.
-/// Returns coordinates in WPF logical DIPs (DPI-unaware; WPF handles scaling via PerMonitorV2 manifest).
+/// Returns coordinates in WPF logical DIPs.
+/// Supports expanded Dynamic Island notification pill sizes (320px for Music, 260px for Volume HUD).
 /// </summary>
 public sealed class MonitorService
 {
-    public (double Width, double Height) GetDimensions(string dockEdge, NotchState state)
+    public (double Width, double Height) GetDimensions(
+        string dockEdge,
+        NotchState state,
+        bool isMediaToast = false,
+        bool isVolumeToast = false,
+        bool isPowerToast = false)
     {
         bool isVerticalEdge = dockEdge is "Left" or "Right";
+        double hoverWidth   = (isVolumeToast || isPowerToast) ? 260 : (isMediaToast ? 320 : 240);
 
         return state switch
         {
-            NotchState.Idle => isVerticalEdge ? (5, 72) : (72, 5),
-            NotchState.CollapsedHover => isVerticalEdge ? (34, 240) : (240, 34),
+            NotchState.Idle => isVerticalEdge ? (8, 72) : (72, 8),
+            NotchState.CollapsedHover => isVerticalEdge ? (34, hoverWidth) : (hoverWidth, 34),
             NotchState.PeekExpanded => isVerticalEdge ? (240, 540) : (540, 240),
-            _ => (72, 5)
+            _ => isVerticalEdge ? (8, 72) : (72, 8)
         };
     }
 
