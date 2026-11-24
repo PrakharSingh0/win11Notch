@@ -18,6 +18,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly MonitorService  _monitorService = new();
     private bool                      _isLoading;
 
+    [ObservableProperty] private int    _selectedCategoryIndex        = 0;
+
     [ObservableProperty] private string _dockEdge                     = "Top";
     [ObservableProperty] private int    _idleOpacityPercent            = 20;
     [ObservableProperty] private int    _acrylicTintPercent            = 70;
@@ -34,6 +36,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _borderAnimationPreset        = "None";
     [ObservableProperty] private bool   _dynamicContentSizing         = true;
     [ObservableProperty] private string _currentMemoryText            = "35.0 MB";
+
+    // Productivity & Timer Settings
+    [ObservableProperty] private int    _defaultFocusMinutes          = 25;
+    [ObservableProperty] private int    _defaultBreakMinutes          = 5;
+    [ObservableProperty] private int    _dailyWaterTargetCups         = 8;
+    [ObservableProperty] private bool   _timerSoundChimesEnabled      = true;
+    [ObservableProperty] private bool   _dualActivityEnabled          = true;
 
     public ObservableCollection<MonitorItem> Monitors { get; } = new();
 
@@ -73,6 +82,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             HandleColor                  = s.HandleColor;
             BorderAnimationPreset        = s.BorderAnimationPreset;
             DynamicContentSizing         = s.DynamicContentSizing;
+            DefaultFocusMinutes          = s.DefaultFocusMinutes;
+            DefaultBreakMinutes          = s.DefaultBreakMinutes;
+            DailyWaterTargetCups         = s.DailyWaterTargetCups;
+            TimerSoundChimesEnabled      = s.TimerSoundChimesEnabled;
+            DualActivityEnabled          = s.DualActivityEnabled;
             LaunchAtStartup              = _startupService.IsStartupEnabled();
 
             Monitors.Clear();
@@ -103,6 +117,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnHandleColorChanged(string value)                  => ApplyAndSave();
     partial void OnBorderAnimationPresetChanged(string value)        => ApplyAndSave();
     partial void OnDynamicContentSizingChanged(bool value)           => ApplyAndSave();
+    partial void OnDefaultFocusMinutesChanged(int value)             => ApplyAndSave();
+    partial void OnDefaultBreakMinutesChanged(int value)             => ApplyAndSave();
+    partial void OnDailyWaterTargetCupsChanged(int value)            => ApplyAndSave();
+    partial void OnTimerSoundChimesEnabledChanged(bool value)        => ApplyAndSave();
+    partial void OnDualActivityEnabledChanged(bool value)            => ApplyAndSave();
 
     [RelayCommand] private void SelectHandleColor(string hex) => HandleColor = hex;
 
@@ -133,6 +152,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.HandleColor                  = HandleColor;
         s.BorderAnimationPreset        = BorderAnimationPreset;
         s.DynamicContentSizing         = DynamicContentSizing;
+        s.DefaultFocusMinutes          = DefaultFocusMinutes;
+        s.DefaultBreakMinutes          = DefaultBreakMinutes;
+        s.DailyWaterTargetCups         = DailyWaterTargetCups;
+        s.TimerSoundChimesEnabled      = TimerSoundChimesEnabled;
+        s.DualActivityEnabled          = DualActivityEnabled;
 
         _ = _settingsService.SaveAsync();
         SettingsChanged?.Invoke();
@@ -155,6 +179,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         HandleColor                  = "#E61A1C20";
         BorderAnimationPreset        = "None";
         DynamicContentSizing         = true;
+        DefaultFocusMinutes          = 25;
+        DefaultBreakMinutes          = 5;
+        DailyWaterTargetCups         = 8;
+        TimerSoundChimesEnabled      = true;
+        DualActivityEnabled          = true;
         LaunchAtStartup              = false;
     }
 }

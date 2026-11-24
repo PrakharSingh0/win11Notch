@@ -7,20 +7,34 @@ using Windows.Storage.Streams;
 
 namespace Win11Notch.Services;
 
+public sealed class MediaSessionItem
+{
+    public string AppId        { get; init; } = string.Empty;
+    public string DisplayName  { get; init; } = string.Empty;
+    public string TrackSummary { get; init; } = string.Empty;
+    public bool   IsActive     { get; init; }
+}
+
 /// <summary>
 /// Controls Windows System Media Transport Controls (SMTC) sessions.
-/// Reads real-time track info, playback state, album art, and timeline progress.
+/// Reads real-time track info, playback state, album art, timeline progress,
+/// dominant album accent color, and supports multi-session player switching.
 /// </summary>
 public sealed class MediaService : IDisposable
 {
+    private static readonly Color DefaultAccentColor = Color.FromRgb(0xFF, 0x5E, 0x36);
+
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
     private GlobalSystemMediaTransportControlsSession?        _currentSession;
+    private string?                                           _preferredAppId;
 
     public string      Title             { get; private set; } = "No Media Playing";
     public string      Artist            { get; private set; } = string.Empty;
+    public string      ActiveSourceName  { get; private set; } = "System Media";
     public bool        IsPlaying         { get; private set; }
     public bool        HasMedia          { get; private set; }
     public ImageSource? Thumbnail        { get; private set; }
+    public Color       AccentColor       { get; private set; } = DefaultAccentColor;
     public TimeSpan    Position          { get; private set; } = TimeSpan.Zero;
     public TimeSpan    Duration          { get; private set; } = TimeSpan.Zero;
     public double      ProgressFraction  => Duration.TotalSeconds > 0 ? Math.Clamp(Position.TotalSeconds / Duration.TotalSeconds, 0.0, 1.0) : 0.0;
@@ -49,9 +63,74 @@ public sealed class MediaService : IDisposable
     {
         try
         {
-            return _sessionManager?.GetCurrentSession() ?? _sessionManager?.GetSessions().FirstOrDefault();
+            var sessions = _sessionManager?.GetSessions();
+            if (sessions != null && !string.IsNullOrWhiteSpace(_preferredAppId))
+            {
+                var preferred = sessions.FirstOrDefault(s =>
+                    string.Equals(s.SourceAppUserModelId, _preferredAppId, StringComparison.OrdinalIgnoreCase));
+                if (preferred != null) return preferred;
+            }
+
+            return _sessionManager?.GetCurrentSession() ?? sessions?.FirstOrDefault();
         }
         catch { return null; }
+    }
+
+    public IReadOnlyList<MediaSessionItem> GetAvailableSessions()
+    {
+        var result = new List<MediaSessionItem>();
+        try
+        {
+            var sessions = _sessionManager?.GetSessions();
+            if (sessions == null) return result;
+
+            string? activeId = _currentSession?.SourceAppUserModelId;
+            foreach (var s in sessions)
+            {
+                string appId = s.SourceAppUserModelId ?? string.Empty;
+                result.Add(new MediaSessionItem
+                {
+                    AppId       = appId,
+                    DisplayName = FormatSourceAppName(appId),
+                    IsActive    = string.Equals(appId, activeId, StringComparison.OrdinalIgnoreCase)
+                });
+            }
+        }
+        catch { /* best effort */ }
+        return result;
+    }
+
+    public void SelectSessionByAppId(string appId)
+    {
+        _preferredAppId = appId;
+        var session = GetBestSession();
+        if (session != null)
+        {
+            UpdateCurrentSession(session);
+        }
+    }
+
+    private static string FormatSourceAppName(string? appId)
+    {
+        if (string.IsNullOrWhiteSpace(appId)) return "Media Player";
+        string lower = appId.ToLowerInvariant();
+        if (lower.Contains("spotify"))    return "Spotify";
+        if (lower.Contains("chrome"))     return "Chrome";
+        if (lower.Contains("msedge"))     return "Edge";
+        if (lower.Contains("firefox"))    return "Firefox";
+        if (lower.Contains("brave"))      return "Brave";
+        if (lower.Contains("applemusic")) return "Apple Music";
+        if (lower.Contains("itunes"))     return "iTunes";
+        if (lower.Contains("vlc"))        return "VLC";
+        if (lower.Contains("zunemusic"))  return "Media Player";
+
+        string trimmed = appId.Split('!')[0];
+        if (trimmed.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^4];
+        int dot = trimmed.LastIndexOf('.');
+        if (dot > 0 && dot < trimmed.Length - 1 && trimmed.Length > 18)
+            trimmed = trimmed[(dot + 1)..];
+        return trimmed;
     }
 
     private void OnSessionsChanged(GlobalSystemMediaTransportControlsSessionManager sender, SessionsChangedEventArgs args)
@@ -84,13 +163,15 @@ public sealed class MediaService : IDisposable
         }
         else
         {
-            Title     = "No Media Playing";
-            Artist    = string.Empty;
-            IsPlaying = false;
-            HasMedia  = false;
-            Thumbnail = null;
-            Position  = TimeSpan.Zero;
-            Duration  = TimeSpan.Zero;
+            Title            = "No Media Playing";
+            Artist           = string.Empty;
+            ActiveSourceName = "System Media";
+            IsPlaying        = false;
+            HasMedia         = false;
+            Thumbnail        = null;
+            AccentColor      = DefaultAccentColor;
+            Position         = TimeSpan.Zero;
+            Duration         = TimeSpan.Zero;
             NotifyMediaChanged();
         }
     }
@@ -127,6 +208,7 @@ public sealed class MediaService : IDisposable
                         playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
 
             var props = await session.TryGetMediaPropertiesAsync();
+            ActiveSourceName = FormatSourceAppName(session.SourceAppUserModelId);
             if (props != null && !string.IsNullOrWhiteSpace(props.Title))
             {
                 Title    = props.Title;
@@ -139,13 +221,13 @@ public sealed class MediaService : IDisposable
                     loadedThumb = await LoadThumbnailAsync(props.Thumbnail);
                 }
 
-                Thumbnail = loadedThumb ?? GenerateFallbackThumbnail(Title, Artist);
+                Thumbnail   = loadedThumb ?? GenerateFallbackThumbnail(Title, Artist);
+                AccentColor = await ExtractAccentSafeAsync(loadedThumb, Title, Artist);
 
                 if (loadedThumb == null)
                 {
                     // Multi-stage retry for delayed cover art from Chromium, Edge, Spotify
                     string capturedTitle = Title;
-                    string capturedArtist = Artist;
                     _ = Task.Run(async () =>
                     {
                         int[] delays = { 250, 600, 1200 };
@@ -164,7 +246,8 @@ public sealed class MediaService : IDisposable
                                         var retryThumb = await LoadThumbnailAsync(p.Thumbnail);
                                         if (retryThumb != null && Title == capturedTitle)
                                         {
-                                            Thumbnail = retryThumb;
+                                            Thumbnail   = retryThumb;
+                                            AccentColor = await ExtractAccentSafeAsync(retryThumb, Title, Artist);
                                             NotifyMediaChanged();
                                             break;
                                         }
@@ -178,7 +261,8 @@ public sealed class MediaService : IDisposable
             }
             else
             {
-                HasMedia = false;
+                HasMedia    = false;
+                AccentColor = DefaultAccentColor;
             }
 
             UpdateTimeline();
@@ -333,6 +417,103 @@ public sealed class MediaService : IDisposable
         }
         catch { /* thumbnail stream unavailable or unreadable */ }
         return null;
+    }
+
+    private static async Task<Color> ExtractAccentSafeAsync(ImageSource? thumb, string title, string artist)
+    {
+        if (thumb is BitmapSource bmp && Application.Current?.Dispatcher != null)
+        {
+            try
+            {
+                return await Application.Current.Dispatcher.InvokeAsync(() => ExtractVibrantAccent(bmp));
+            }
+            catch { }
+        }
+
+        // Match deterministic fallback gradient highlight
+        int hash = Math.Abs((title + artist).GetHashCode());
+        return (hash % 6) switch
+        {
+            0 => Color.FromRgb(0xE9, 0x40, 0x57),
+            1 => Color.FromRgb(0x00, 0xDF, 0xD8),
+            2 => Color.FromRgb(0xFF, 0x3D, 0x8B),
+            3 => Color.FromRgb(0x38, 0xEF, 0x7D),
+            4 => Color.FromRgb(0xFF, 0x58, 0x58),
+            _ => Color.FromRgb(0x8F, 0x94, 0xFB)
+        };
+    }
+
+    private static Color ExtractVibrantAccent(BitmapSource bmp)
+    {
+        try
+        {
+            var src = bmp.Format == PixelFormats.Bgra32 || bmp.Format == PixelFormats.Pbgra32
+                ? bmp
+                : new FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0);
+
+            int w = src.PixelWidth;
+            int h = src.PixelHeight;
+            if (w <= 0 || h <= 0) return DefaultAccentColor;
+
+            int stride = w * 4;
+            byte[] pixels = new byte[stride * h];
+            src.CopyPixels(pixels, stride, 0);
+
+            int stepX = Math.Max(1, w / 24);
+            int stepY = Math.Max(1, h / 24);
+
+            double sumR = 0, sumG = 0, sumB = 0, totalWeight = 0;
+
+            for (int y = 0; y < h; y += stepY)
+            {
+                int row = y * stride;
+                for (int x = 0; x < w; x += stepX)
+                {
+                    int idx = row + x * 4;
+                    byte b = pixels[idx];
+                    byte g = pixels[idx + 1];
+                    byte r = pixels[idx + 2];
+                    byte a = pixels[idx + 3];
+                    if (a < 128) continue;
+
+                    int max = Math.Max(r, Math.Max(g, b));
+                    int min = Math.Min(r, Math.Min(g, b));
+                    double sat = max > 0 ? (double)(max - min) / max : 0.0;
+                    double luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0;
+
+                    // Favor rich vibrant midtones, reject dark shadows and washed highlights
+                    if (sat < 0.22 || luma < 0.14 || luma > 0.90) continue;
+
+                    double weight = sat * sat * (1.0 - Math.Abs(luma - 0.55));
+                    sumR += r * weight;
+                    sumG += g * weight;
+                    sumB += b * weight;
+                    totalWeight += weight;
+                }
+            }
+
+            if (totalWeight <= 0.001) return DefaultAccentColor;
+
+            byte ar = (byte)Math.Clamp(sumR / totalWeight, 0, 255);
+            byte ag = (byte)Math.Clamp(sumG / totalWeight, 0, 255);
+            byte ab = (byte)Math.Clamp(sumB / totalWeight, 0, 255);
+
+            // Lift dark accents slightly so they pop against #1A1C20 dark-slate acrylic
+            int peak = Math.Max(ar, Math.Max(ag, ab));
+            if (peak > 0 && peak < 185)
+            {
+                double lift = 195.0 / peak;
+                ar = (byte)Math.Clamp(ar * lift, 0, 255);
+                ag = (byte)Math.Clamp(ag * lift, 0, 255);
+                ab = (byte)Math.Clamp(ab * lift, 0, 255);
+            }
+
+            return Color.FromRgb(ar, ag, ab);
+        }
+        catch
+        {
+            return DefaultAccentColor;
+        }
     }
 
     public static ImageSource GenerateFallbackThumbnail(string title, string artist)

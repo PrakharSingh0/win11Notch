@@ -1,13 +1,15 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using Win11Notch.Core.Settings;
 
 namespace Win11Notch.Services;
 
 /// <summary>
 /// Instant screen capture tool.
-/// Snaps the primary monitor and immediately stages the image file in the Notch Shelf.
+/// Snaps the active target monitor and immediately stages the image file in the Notch Shelf.
 /// </summary>
 public sealed class ScreenCaptureService
 {
@@ -17,12 +19,16 @@ public sealed class ScreenCaptureService
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
-    private readonly ShelfService _shelfService;
-    private readonly string _screenshotsFolder;
+    private readonly ShelfService    _shelfService;
+    private readonly MonitorService  _monitorService;
+    private readonly SettingsService _settingsService;
+    private readonly string          _screenshotsFolder;
 
-    public ScreenCaptureService(ShelfService shelfService)
+    public ScreenCaptureService(ShelfService shelfService, MonitorService monitorService, SettingsService settingsService)
     {
-        _shelfService = shelfService;
+        _shelfService    = shelfService;
+        _monitorService  = monitorService;
+        _settingsService = settingsService;
         try
         {
             _screenshotsFolder = Path.Combine(
@@ -48,8 +54,11 @@ public sealed class ScreenCaptureService
     {
         try
         {
-            int width  = GetSystemMetrics(SM_CXSCREEN);
-            int height = GetSystemMetrics(SM_CYSCREEN);
+            var target = _monitorService.GetTargetMonitor(_settingsService.Current.TargetMonitorIndex);
+            int srcX   = target?.PhysLeft ?? 0;
+            int srcY   = target?.PhysTop  ?? 0;
+            int width  = target is { PhysWidth:  > 0 } ? target.PhysWidth  : GetSystemMetrics(SM_CXSCREEN);
+            int height = target is { PhysHeight: > 0 } ? target.PhysHeight : GetSystemMetrics(SM_CYSCREEN);
 
             string fileName = $"Snip_{DateTime.Now:yyyyMMdd_HHmmss}.png";
             string filePath = Path.Combine(_screenshotsFolder, fileName);
@@ -58,7 +67,7 @@ public sealed class ScreenCaptureService
             {
                 using (var g = Graphics.FromImage(bmp))
                 {
-                    g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
+                    g.CopyFromScreen(srcX, srcY, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
                 }
                 bmp.Save(filePath, ImageFormat.Png);
             }
@@ -71,5 +80,15 @@ public sealed class ScreenCaptureService
         {
             return string.Empty;
         }
+    }
+
+    public void OpenScreenshotsFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(_screenshotsFolder);
+            Process.Start(new ProcessStartInfo(_screenshotsFolder) { UseShellExecute = true });
+        }
+        catch { /* best effort */ }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -93,10 +94,23 @@ public sealed class ShelfItem
 /// </summary>
 public sealed class ShelfService
 {
+    private readonly string _stateFilePath;
+
     public ObservableCollection<ShelfItem> Items { get; } = new();
+
+    public ShelfService()
+    {
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Win11Notch");
+        Directory.CreateDirectory(dir);
+        _stateFilePath = Path.Combine(dir, "shelf.json");
+        Load();
+    }
 
     public void AddFiles(IEnumerable<string> paths)
     {
+        bool added = false;
         foreach (var path in paths)
         {
             if (File.Exists(path) || Directory.Exists(path))
@@ -104,14 +118,54 @@ public sealed class ShelfService
                 if (!Items.Any(i => string.Equals(i.FilePath, path, StringComparison.OrdinalIgnoreCase)))
                 {
                     Items.Add(ShelfItem.FromFile(path));
+                    added = true;
                 }
             }
         }
+        if (added) Save();
     }
 
-    public void RemoveItem(ShelfItem item) => Items.Remove(item);
+    public void RemoveItem(ShelfItem item)
+    {
+        if (Items.Remove(item)) Save();
+    }
 
-    public void Clear() => Items.Clear();
+    public void Clear()
+    {
+        if (Items.Count > 0)
+        {
+            Items.Clear();
+            Save();
+        }
+    }
+
+    private void Load()
+    {
+        try
+        {
+            if (!File.Exists(_stateFilePath)) return;
+            var paths = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(_stateFilePath));
+            if (paths == null) return;
+            foreach (var p in paths)
+            {
+                if (File.Exists(p) || Directory.Exists(p))
+                {
+                    Items.Add(ShelfItem.FromFile(p));
+                }
+            }
+        }
+        catch { /* best effort */ }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            var paths = Items.Select(i => i.FilePath).ToList();
+            File.WriteAllText(_stateFilePath, JsonSerializer.Serialize(paths));
+        }
+        catch { /* best effort */ }
+    }
 
     public void CopyPathsToClipboard()
     {

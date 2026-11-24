@@ -149,6 +149,15 @@ public sealed class AudioService : IDisposable
         int GetMute([MarshalAs(UnmanagedType.Bool)] out bool isMuted);
     }
 
+    [Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioMeterInformation
+    {
+        [PreserveSig] int GetPeakValue(out float pfPeak);
+        [PreserveSig] int GetMeteringChannelCount(out uint pnChannelCount);
+        [PreserveSig] int GetChannelsPeakValues(uint u32ChannelCount, [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] float[] afPeakValues);
+        [PreserveSig] int QueryHardwareSupport(out uint pdwHardwareSupportMask);
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct AUDIO_VOLUME_NOTIFICATION_DATA
     {
@@ -209,13 +218,16 @@ public sealed class AudioService : IDisposable
     private IMMDeviceEnumerator?       _deviceEnumerator;
     private NotificationClientHandler? _notificationHandler;
     private IAudioEndpointVolume?      _cachedEndpoint;
+    private IAudioMeterInformation?    _cachedMeter;
     private VolumeCallbackHandler?     _callbackHandler;
+    private readonly float[]           _peakChannelBuf = new float[8];
     private readonly object            _syncLock = new();
 
     public string ActiveDeviceName { get; private set; } = "Default Playback Device";
 
     public event Action<float, bool, bool>? VolumeChanged;
     public event Action<string>?            ActiveDeviceChanged;
+    public event Action<int>?               BluetoothBatteryChanged;
 
     public AudioService()
     {
@@ -268,6 +280,7 @@ public sealed class AudioService : IDisposable
                     try { _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler); } catch { }
                     _cachedEndpoint = null;
                 }
+                _cachedMeter = null;
 
                 _deviceEnumerator ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
 
@@ -281,7 +294,10 @@ public sealed class AudioService : IDisposable
                         ActiveDeviceName = detectedName;
                         if (changed)
                         {
+                            _cachedBtBattery = -1;
+                            _lastBtCheck = DateTime.MinValue;
                             ActiveDeviceChanged?.Invoke(ActiveDeviceName);
+                            _ = GetActiveBluetoothBatteryPercent();
                         }
                     }
 
@@ -299,6 +315,17 @@ public sealed class AudioService : IDisposable
                             VolumeChanged?.Invoke(vol, muted, true);
                         }
                     }
+
+                    // Activate endpoint peak meter for active spectrum visualization
+                    try
+                    {
+                        var meterIid = typeof(IAudioMeterInformation).GUID;
+                        if (device.Activate(ref meterIid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out var meterObj) == 0 && meterObj != null)
+                        {
+                            _cachedMeter = (IAudioMeterInformation)meterObj;
+                        }
+                    }
+                    catch { /* audio meter optional */ }
                 }
             }
             catch { /* audio device might be absent/disabled */ }
@@ -469,35 +496,92 @@ public sealed class AudioService : IDisposable
 
     public int GetActiveBluetoothBatteryPercent()
     {
-        if ((DateTime.UtcNow - _lastBtCheck).TotalSeconds > 15 && !_isQueryingBtBattery)
+        if ((DateTime.UtcNow - _lastBtCheck).TotalSeconds > 12 && !_isQueryingBtBattery)
         {
             _isQueryingBtBattery = true;
             _lastBtCheck = DateTime.UtcNow;
+            string currentAudioName = ActiveDeviceName;
+
             _ = Task.Run(async () =>
             {
                 try
                 {
                     const string BatteryPropertyKey = "{104ea319-6ee2-4701-bd47-8ddbf425bbe5} 2";
-                    var devs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(
-                        Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromPairingState(true),
-                        new[] { BatteryPropertyKey });
+                    const string IsConnectedKey     = "System.Devices.Aep.IsConnected";
+                    string[] props = { BatteryPropertyKey, IsConnectedKey };
+
+                    // Check if the active playback endpoint is likely non-Bluetooth (e.g. built-in Realtek speakers)
+                    bool isLikelyNonBt = currentAudioName.Contains("Realtek", StringComparison.OrdinalIgnoreCase)
+                                      || currentAudioName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+                                      || currentAudioName.Contains("AMD", StringComparison.OrdinalIgnoreCase)
+                                      || currentAudioName.Contains("Display Audio", StringComparison.OrdinalIgnoreCase);
+
                     int found = -1;
-                    if (devs != null)
+                    int fallbackConnectedBt = -1;
+
+                    // Query Classic Bluetooth (HFP/Hands-Free) + BLE connected devices + PnP battery containers
+                    var selectors = new[]
                     {
-                        foreach (var dev in devs)
+                        Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromConnectionStatus(
+                            Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected),
+                        Windows.Devices.Bluetooth.BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(
+                            Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected),
+                        "System.Devices.DevObjectType:=5" // PnP Device Nodes holding HFP battery level
+                    };
+
+                    foreach (var selector in selectors)
+                    {
+                        try
                         {
-                            if (dev.Properties.TryGetValue(BatteryPropertyKey, out var val) && val != null)
+                            var devs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(selector, props);
+                            if (devs == null) continue;
+
+                            foreach (var dev in devs)
                             {
+                                if (!dev.Properties.TryGetValue(BatteryPropertyKey, out var val) || val == null)
+                                    continue;
+
                                 int percent = Convert.ToInt32(val);
-                                if (percent > 0 && percent <= 100)
+                                if (percent <= 0 || percent > 100) continue;
+
+                                bool nameMatch = !string.IsNullOrWhiteSpace(dev.Name) &&
+                                    (currentAudioName.Contains(dev.Name, StringComparison.OrdinalIgnoreCase) ||
+                                     dev.Name.Contains(currentAudioName, StringComparison.OrdinalIgnoreCase));
+
+                                if (nameMatch)
                                 {
                                     found = percent;
                                     break;
                                 }
+
+                                bool connected = !dev.Properties.TryGetValue(IsConnectedKey, out var connObj)
+                                                 || connObj is not bool b || b;
+                                if (connected && fallbackConnectedBt < 0)
+                                {
+                                    fallbackConnectedBt = percent;
+                                }
                             }
+
+                            if (found > 0) break;
+                        }
+                        catch { }
+                    }
+
+                    // Only use fallback connected BT battery if current output is not known wired/display audio
+                    int resolved = found > 0 ? found : (isLikelyNonBt ? -1 : fallbackConnectedBt);
+
+                    if (_cachedBtBattery != resolved)
+                    {
+                        _cachedBtBattery = resolved;
+                        if (Application.Current?.Dispatcher != null)
+                        {
+                            _ = Application.Current.Dispatcher.InvokeAsync(() => BluetoothBatteryChanged?.Invoke(resolved));
+                        }
+                        else
+                        {
+                            BluetoothBatteryChanged?.Invoke(resolved);
                         }
                     }
-                    _cachedBtBattery = found;
                 }
                 catch { }
                 finally
@@ -509,12 +593,45 @@ public sealed class AudioService : IDisposable
         return _cachedBtBattery;
     }
 
+    public (float Left, float Right, float Peak) GetAudioPeakLevels()
+    {
+        lock (_syncLock)
+        {
+            if (_cachedMeter == null) return (0f, 0f, 0f);
+            try
+            {
+                float peak = 0f;
+                _cachedMeter.GetPeakValue(out peak);
+
+                if (_cachedMeter.GetMeteringChannelCount(out uint ch) == 0 && ch >= 2)
+                {
+                    uint count = Math.Min(ch, (uint)_peakChannelBuf.Length);
+                    if (_cachedMeter.GetChannelsPeakValues(count, _peakChannelBuf) == 0)
+                    {
+                        return (
+                            Math.Clamp(_peakChannelBuf[0], 0f, 1f),
+                            Math.Clamp(_peakChannelBuf[1], 0f, 1f),
+                            Math.Clamp(peak, 0f, 1f));
+                    }
+                }
+
+                float clamped = Math.Clamp(peak, 0f, 1f);
+                return (clamped, clamped, clamped);
+            }
+            catch
+            {
+                return (0f, 0f, 0f);
+            }
+        }
+    }
+
     public void Dispose()
     {
         lock (_syncLock)
         {
             try
             {
+                _cachedMeter = null;
                 if (_cachedEndpoint != null && _callbackHandler != null)
                 {
                     _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler);

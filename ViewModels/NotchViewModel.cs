@@ -5,11 +5,17 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Win11Notch.Core.Settings;
 using Win11Notch.Core.State;
 using Win11Notch.Models;
 using Win11Notch.Services;
 
 namespace Win11Notch.ViewModels;
+
+public sealed partial class WaveBarModel : ObservableObject
+{
+    [ObservableProperty] private double _height = 5.0;
+}
 
 /// <summary>
 /// Master ViewModel for the NotchWindow overlay.
@@ -25,24 +31,47 @@ public sealed partial class NotchViewModel : ObservableObject
     private readonly ResourceMonitorService  _resourceMonitor;
     private readonly ClipboardService        _clipboardService;
     private readonly ScreenCaptureService    _screenCaptureService;
+    private readonly TimerService            _timerService;
+    private readonly SettingsService         _settingsService;
+    private readonly PowerAwakeService       _powerAwakeService;
+    private readonly ScratchpadService       _scratchpadService;
+    private readonly CalendarService         _calendarService;
+
+    public TimerService    Timer    => _timerService;
+    public CalendarService Calendar => _calendarService;
 
     [ObservableProperty] private NotchState   _currentState       = NotchState.Idle;
     [ObservableProperty] private string       _clockText          = string.Empty;
     [ObservableProperty] private string       _dateText           = string.Empty;
     [ObservableProperty] private int          _selectedTabIndex   = 0;
-    [ObservableProperty] private int          _shelfSubTabIndex   = 0; // 0: Files, 1: Clipboard
+    [ObservableProperty] private int          _shelfSubTabIndex   = 0;
+    [ObservableProperty] private int          _clipboardFilterIndex = 0; // 0: All, 1: Text, 2: Images, 3: URLs
+
+    // Calendar quick composer properties
+    [ObservableProperty] private bool         _isAddingCalendarEvent;
+    [ObservableProperty] private string       _newCalendarTitle      = string.Empty;
+    [ObservableProperty] private string       _newCalendarTime       = "09:00";
+    [ObservableProperty] private bool         _newCalendarIsAllDay;
+    [ObservableProperty] private bool         _newCalendarIsReminder = true;
+    [ObservableProperty] private string       _newCalendarAccentHex  = "#FF5E36";
 
     // Media properties
     [ObservableProperty] private string       _mediaTitle             = "No Media Playing";
     [ObservableProperty] private string       _mediaArtist            = string.Empty;
+    [ObservableProperty] private string       _activeMediaSourceName  = "System Media";
+    [ObservableProperty] private bool         _isMediaSourceMenuOpen;
     [ObservableProperty] private bool         _isMediaPlaying;
     [ObservableProperty] private bool         _hasMedia;
     [ObservableProperty] private ImageSource? _mediaThumbnail;
+    [ObservableProperty] private Brush        _mediaAccentBrush       = CreateFrozenBrush(Color.FromRgb(0xFF, 0x5E, 0x36));
+    [ObservableProperty] private Brush        _mediaAccentGlowBrush   = CreateFrozenBrush(Color.FromArgb(0x40, 0xFF, 0x5E, 0x36));
     [ObservableProperty] private bool         _isMediaToastActive;
     [ObservableProperty] private string       _mediaPositionText      = "00:00";
     [ObservableProperty] private string       _mediaDurationText      = "00:00";
     [ObservableProperty] private double       _mediaProgressFraction;
     [ObservableProperty] private double       _mediaProgressPercent;
+    public ObservableCollection<MediaSessionItem> MediaSessions { get; } = new();
+    public ObservableCollection<WaveBarModel>     WaveBars      { get; } = new();
 
     public event Action<bool>? MediaToastActiveChanged;
     partial void OnIsMediaToastActiveChanged(bool value) => MediaToastActiveChanged?.Invoke(value);
@@ -90,6 +119,20 @@ public sealed partial class NotchViewModel : ObservableObject
     // Connected Audio Device & Bluetooth Battery
     [ObservableProperty] private string          _bluetoothBatteryText = string.Empty;
     [ObservableProperty] private bool            _hasBluetoothBattery;
+    [ObservableProperty] private bool            _isBottomAudioMenuOpen;
+
+    public bool IsDualActivity      => IsMediaPlaying && IsStopwatchRunning && _settingsService.Current.DualActivityEnabled;
+    public bool IsMediaOnlyActivity => IsMediaPlaying && (!IsStopwatchRunning || !_settingsService.Current.DualActivityEnabled);
+    public bool IsTimerOnlyActivity => !IsMediaPlaying && IsStopwatchRunning;
+
+    public bool IsVerticalDock   => _settingsService.Current.DockEdge is "Left" or "Right";
+    public bool IsHorizontalDock => !IsVerticalDock;
+
+    // Power Stay-Awake & Quick Scratchpad
+    [ObservableProperty] private bool   _isStayAwakeEnabled;
+    [ObservableProperty] private string _scratchpadText = string.Empty;
+    [ObservableProperty] private bool   _scratchpadCopied;
+    private DispatcherTimer? _scratchpadSaveTimer;
 
     // Sparkline Graph & Area Point Collections
     [ObservableProperty] private PointCollection _cpuGraphPoints      = new();
@@ -129,6 +172,14 @@ public sealed partial class NotchViewModel : ObservableObject
 
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _timelineTimer;
+    private DispatcherTimer? _spectrumTimer;
+    private double           _wavePhase;
+
+    partial void OnSelectedTabIndexChanged(int value)
+    {
+        CloseAllMenus();
+        UpdateSpectrumState();
+    }
 
     public NotchViewModel(
         NotchStateMachine      stateMachine,
@@ -137,7 +188,12 @@ public sealed partial class NotchViewModel : ObservableObject
         AudioService            audioService,
         ResourceMonitorService  resourceMonitor,
         ClipboardService        clipboardService,
-        ScreenCaptureService    screenCaptureService)
+        ScreenCaptureService    screenCaptureService,
+        TimerService            timerService,
+        SettingsService         settingsService,
+        PowerAwakeService       powerAwakeService,
+        ScratchpadService       scratchpadService,
+        CalendarService         calendarService)
     {
         _stateMachine          = stateMachine;
         _mediaService          = mediaService;
@@ -146,6 +202,27 @@ public sealed partial class NotchViewModel : ObservableObject
         _resourceMonitor       = resourceMonitor;
         _clipboardService      = clipboardService;
         _screenCaptureService  = screenCaptureService;
+        _timerService          = timerService;
+        _settingsService       = settingsService;
+        _powerAwakeService     = powerAwakeService;
+        _scratchpadService     = scratchpadService;
+        _calendarService       = calendarService;
+
+        _scratchpadText = _scratchpadService.Load();
+        _powerAwakeService.AwakeStateChanged += awake => IsStayAwakeEnabled = awake;
+        _calendarService.ReminderDue += OnCalendarReminderDue;
+
+        // Wire timer updates to Dynamic Island handle & capsule
+        _timerService.TimerActivityChanged += () =>
+        {
+            IsStopwatchRunning = _timerService.IsAnyTimerRunning;
+            StopwatchText      = _timerService.IslandTimerText;
+            OnPropertyChanged(nameof(IsStopwatchRunning));
+            OnPropertyChanged(nameof(StopwatchText));
+            OnPropertyChanged(nameof(IsDualActivity));
+            OnPropertyChanged(nameof(IsMediaOnlyActivity));
+            OnPropertyChanged(nameof(IsTimerOnlyActivity));
+        };
 
         // Wire media updates & timeline
         _mediaService.MediaChanged    += OnMediaChanged;
@@ -154,12 +231,17 @@ public sealed partial class NotchViewModel : ObservableObject
         // Wire resource stats
         _resourceMonitor.StatsUpdated += OnResourceStatsUpdated;
 
-        // Wire shelf changes
+        // Initialize 16 stereo-reactive waveform bars
+        for (int i = 0; i < 16; i++) WaveBars.Add(new WaveBarModel());
+
+        // Wire shelf changes & load initial persisted count
         _shelfService.Items.CollectionChanged += (_, _) =>
         {
             HasStagedFiles = _shelfService.Items.Count > 0;
-            ShelfCountText = _shelfService.Items.Count > 0 ? $"📦 {_shelfService.Items.Count}" : string.Empty;
+            ShelfCountText = _shelfService.Items.Count > 0 ? $"{_shelfService.Items.Count}" : string.Empty;
         };
+        HasStagedFiles = _shelfService.Items.Count > 0;
+        ShelfCountText = _shelfService.Items.Count > 0 ? $"{_shelfService.Items.Count}" : string.Empty;
 
         // Wire clipboard changes
         _clipboardService.History.CollectionChanged += (_, _) => RefreshFilteredClipboard();
@@ -182,8 +264,15 @@ public sealed partial class NotchViewModel : ObservableObject
         _audioService.ActiveDeviceChanged += name =>
         {
             ActiveAudioDeviceName = name;
-            RefreshAudioDevices(updateDeviceInfo: false);
+            RefreshAudioDevices(updateDeviceInfo: true);
         };
+
+        _audioService.BluetoothBatteryChanged += _ =>
+        {
+            Application.Current?.Dispatcher.InvokeAsync(UpdateAudioDeviceInfo);
+        };
+
+        UpdateAudioDeviceInfo();
 
         _audioService.VolumeChanged += (vol, muted, _) =>
         {
@@ -200,10 +289,15 @@ public sealed partial class NotchViewModel : ObservableObject
             }
         };
 
+        // Spectrum visualizer timer (25 FPS, active ONLY while Media Tab is open & playing; 0 Hz in Idle)
+        _spectrumTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+        _spectrumTimer.Tick += (_, _) => OnSpectrumTick();
+
         // State changes
         _stateMachine.StateChanged += (_, state) =>
         {
             CurrentState = state;
+            if (state != NotchState.PeekExpanded) CloseAllMenus();
 
             if (state is NotchState.CollapsedHover or NotchState.PeekExpanded)
                 StartClock();
@@ -215,7 +309,7 @@ public sealed partial class NotchViewModel : ObservableObject
             {
                 _resourceMonitor.StartMonitoring();
                 _audioService.RefreshActiveDevice();
-                ActiveAudioDeviceName = _audioService.ActiveDeviceName;
+                UpdateAudioDeviceInfo();
                 _ = _mediaService.RefreshMediaInfoAsync();
 
                 if (state == NotchState.PeekExpanded && IsMediaPlaying)
@@ -228,6 +322,8 @@ public sealed partial class NotchViewModel : ObservableObject
                 _resourceMonitor.StopMonitoring();
                 _timelineTimer.Stop();
             }
+
+            UpdateSpectrumState();
         };
     }
 
@@ -247,12 +343,21 @@ public sealed partial class NotchViewModel : ObservableObject
 
     private void OnMediaChanged()
     {
-        MediaTitle      = _mediaService.Title;
-        MediaArtist     = _mediaService.Artist;
-        IsMediaPlaying  = _mediaService.IsPlaying;
-        HasMedia        = _mediaService.HasMedia;
-        MediaThumbnail  = _mediaService.Thumbnail;
+        MediaTitle            = _mediaService.Title;
+        MediaArtist           = _mediaService.Artist;
+        ActiveMediaSourceName = _mediaService.ActiveSourceName;
+        IsMediaPlaying        = _mediaService.IsPlaying;
+        HasMedia              = _mediaService.HasMedia;
+        MediaThumbnail        = _mediaService.Thumbnail;
+
+        var accent = _mediaService.AccentColor;
+        MediaAccentBrush     = CreateFrozenBrush(accent);
+        MediaAccentGlowBrush = CreateFrozenBrush(Color.FromArgb(0x42, accent.R, accent.G, accent.B));
+
         OnTimelineChanged();
+        OnPropertyChanged(nameof(IsDualActivity));
+        OnPropertyChanged(nameof(IsMediaOnlyActivity));
+        OnPropertyChanged(nameof(IsTimerOnlyActivity));
 
         if (CurrentState == NotchState.PeekExpanded && IsMediaPlaying)
         {
@@ -262,6 +367,56 @@ public sealed partial class NotchViewModel : ObservableObject
         {
             _timelineTimer?.Stop();
         }
+
+        UpdateSpectrumState();
+    }
+
+    private void UpdateSpectrumState()
+    {
+        bool shouldRun = CurrentState == NotchState.PeekExpanded && SelectedTabIndex == 0 && IsMediaPlaying;
+        if (shouldRun)
+        {
+            if (_spectrumTimer is { IsEnabled: false }) _spectrumTimer.Start();
+        }
+        else
+        {
+            _spectrumTimer?.Stop();
+            foreach (var bar in WaveBars) bar.Height = 5.0;
+        }
+    }
+
+    private void OnSpectrumTick()
+    {
+        if (CurrentState != NotchState.PeekExpanded || SelectedTabIndex != 0 || !IsMediaPlaying)
+        {
+            UpdateSpectrumState();
+            return;
+        }
+
+        var (left, right, peak) = _audioService.GetAudioPeakLevels();
+        // Gentle minimum floor when SMTC reports playing even during quiet passages
+        double baseAmp = Math.Max(peak, 0.08);
+        _wavePhase += 0.28;
+
+        int n = WaveBars.Count;
+        for (int i = 0; i < n; i++)
+        {
+            // Stereo weighting: left channels favor left bars, right channels favor right bars, center peak peaks in middle
+            double pan = (double)i / Math.Max(1, n - 1);
+            double channelAmp = (1.0 - pan) * Math.Max(left, baseAmp) + pan * Math.Max(right, baseAmp);
+            double centerShape = 0.65 + 0.35 * Math.Sin(pan * Math.PI);
+            double harmonic = 0.55 + 0.45 * Math.Abs(Math.Sin(_wavePhase + i * 0.72) * Math.Cos(_wavePhase * 0.53 + i * 0.41));
+
+            double target = Math.Clamp(5.0 + channelAmp * centerShape * harmonic * 36.0, 5.0, 38.0);
+            WaveBars[i].Height = WaveBars[i].Height * 0.42 + target * 0.58;
+        }
+    }
+
+    private static Brush CreateFrozenBrush(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
     }
 
     private void OnTimelineChanged()
@@ -278,7 +433,9 @@ public sealed partial class NotchViewModel : ObservableObject
         MemoryPercent      = _resourceMonitor.MemoryPercent;
         RamText            = $"{_resourceMonitor.RamUsedGb:F1} / {_resourceMonitor.RamTotalGb:F1} GB";
         GpuPercent         = _resourceMonitor.GpuPercent;
-        VramText           = _resourceMonitor.VramUsedGb > 0 ? $"{_resourceMonitor.VramUsedGb:F2} GB" : "Shared";
+        VramText           = _resourceMonitor.VramTotalGb > 0
+            ? $"VRAM {_resourceMonitor.VramUsedGb:F1} / {_resourceMonitor.VramTotalGb:F0} GB"
+            : (_resourceMonitor.VramUsedGb > 0 ? $"VRAM {_resourceMonitor.VramUsedGb:F1} GB" : "VRAM Shared");
         DiskPercent        = _resourceMonitor.DiskPercent;
         NetworkName        = _resourceMonitor.NetworkName;
         NetworkDetail      = _resourceMonitor.NetworkDetail;
@@ -376,6 +533,40 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand] private async Task PreviousTrack() => await _mediaService.PreviousTrackAsync();
     [RelayCommand] private async Task SeekMediaFraction(double fraction) => await _mediaService.SeekToFractionAsync(fraction);
 
+    [RelayCommand]
+    private void ToggleMediaSourceMenu()
+    {
+        bool next = !IsMediaSourceMenuOpen;
+        CloseAllMenus();
+        IsMediaSourceMenuOpen = next;
+        if (next)
+        {
+            MediaSessions.Clear();
+            foreach (var s in _mediaService.GetAvailableSessions())
+            {
+                MediaSessions.Add(s);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void SelectMediaSession(MediaSessionItem? session)
+    {
+        if (session != null)
+        {
+            _mediaService.SelectSessionByAppId(session.AppId);
+        }
+        IsMediaSourceMenuOpen = false;
+    }
+
+    public void CloseAllMenus()
+    {
+        IsAudioDeviceMenuOpen = false;
+        IsBottomAudioMenuOpen = false;
+        IsDriveMenuOpen       = false;
+        IsMediaSourceMenuOpen = false;
+    }
+
     // ── Shelf commands ────────────────────────────────────────────────────────
 
     [RelayCommand] private void RemoveShelfItem(ShelfItem item) => _shelfService.RemoveItem(item);
@@ -385,20 +576,45 @@ public sealed partial class NotchViewModel : ObservableObject
     // ── Clipboard commands ────────────────────────────────────────────────────
 
     partial void OnClipboardSearchTextChanged(string value) => RefreshFilteredClipboard();
+    partial void OnClipboardFilterIndexChanged(int value) => RefreshFilteredClipboard();
 
     public void RefreshFilteredClipboard()
     {
         var q = ClipboardSearchText?.Trim();
-        var source = _clipboardService.History;
-        var filtered = string.IsNullOrEmpty(q)
-            ? source.OrderByDescending(i => i.IsPinned).ThenByDescending(i => i.Timestamp)
-            : source.Where(i => i.Text.Contains(q, StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(i => i.IsPinned).ThenByDescending(i => i.Timestamp);
+        IEnumerable<ClipboardItem> source = _clipboardService.History;
+
+        source = ClipboardFilterIndex switch
+        {
+            1 => source.Where(i => i.Kind == ClipboardItemKind.Text),
+            2 => source.Where(i => i.Kind == ClipboardItemKind.Image),
+            3 => source.Where(i => i.Kind == ClipboardItemKind.Url),
+            _ => source
+        };
+
+        if (!string.IsNullOrEmpty(q))
+        {
+            source = source.Where(i =>
+                i.Text.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                i.BadgeText.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var ordered = source
+            .OrderByDescending(i => i.IsPinned)
+            .ThenByDescending(i => i.Timestamp);
 
         FilteredClipboardHistory.Clear();
-        foreach (var item in filtered)
+        foreach (var item in ordered)
         {
             FilteredClipboardHistory.Add(item);
+        }
+    }
+
+    [RelayCommand]
+    private void SetClipboardFilter(object? param)
+    {
+        if (int.TryParse(param?.ToString(), out int idx))
+        {
+            ClipboardFilterIndex = idx;
         }
     }
 
@@ -409,6 +625,15 @@ public sealed partial class NotchViewModel : ObservableObject
         item.IsCopied = true;
         await Task.Delay(1200);
         item.IsCopied = false;
+    }
+
+    [RelayCommand]
+    private void OpenClipboardUrl(ClipboardItem? item)
+    {
+        if (item is { Kind: ClipboardItemKind.Url } && !string.IsNullOrWhiteSpace(item.Text))
+        {
+            SafeLaunch(item.Text);
+        }
     }
 
     [RelayCommand]
@@ -432,14 +657,106 @@ public sealed partial class NotchViewModel : ObservableObject
         RefreshFilteredClipboard();
     }
 
+    // ── Calendar commands ─────────────────────────────────────────────────────
+
+    [RelayCommand] private void CalendarPreviousMonth() => _calendarService.PreviousMonth();
+    [RelayCommand] private void CalendarNextMonth() => _calendarService.NextMonth();
+    [RelayCommand] private void CalendarToday() => _calendarService.GoToToday();
+
+    [RelayCommand]
+    private void CalendarSelectDate(CalendarDayCell? cell)
+    {
+        if (cell != null)
+        {
+            _calendarService.SelectDate(cell.Date);
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleAddCalendarEvent()
+    {
+        IsAddingCalendarEvent = !IsAddingCalendarEvent;
+        if (IsAddingCalendarEvent && string.IsNullOrWhiteSpace(NewCalendarTime))
+        {
+            NewCalendarTime = DateTime.Now.AddMinutes(30).ToString("HH:mm");
+        }
+    }
+
+    [RelayCommand]
+    private void SelectCalendarAccent(string? hex)
+    {
+        if (!string.IsNullOrWhiteSpace(hex))
+        {
+            NewCalendarAccentHex = hex;
+        }
+    }
+
+    [RelayCommand]
+    private void SaveNewCalendarItem()
+    {
+        if (string.IsNullOrWhiteSpace(NewCalendarTitle)) return;
+
+        _calendarService.AddItem(
+            NewCalendarTitle,
+            NewCalendarTime,
+            NewCalendarIsAllDay,
+            NewCalendarIsReminder,
+            NewCalendarAccentHex);
+
+        NewCalendarTitle = string.Empty;
+        IsAddingCalendarEvent = false;
+    }
+
+    [RelayCommand]
+    private void ToggleCalendarItemComplete(CalendarItem? item)
+    {
+        if (item != null)
+        {
+            _calendarService.ToggleComplete(item);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveCalendarItem(CalendarItem? item)
+    {
+        if (item != null)
+        {
+            _calendarService.RemoveItem(item);
+        }
+    }
+
+    private DispatcherTimer? _reminderToastTimer;
+
+    private void OnCalendarReminderDue(CalendarItem item)
+    {
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            PowerToastIcon   = "\uE787";
+            PowerToastTitle  = item.Title;
+            PowerToastDetail = item.DisplayTime;
+            IsPowerToastActive = true;
+
+            _reminderToastTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            _reminderToastTimer.Stop();
+            _reminderToastTimer.Tick -= OnReminderToastTick;
+            _reminderToastTimer.Tick += OnReminderToastTick;
+            _reminderToastTimer.Start();
+        });
+    }
+
+    private void OnReminderToastTick(object? sender, EventArgs e)
+    {
+        _reminderToastTimer?.Stop();
+        IsPowerToastActive = false;
+    }
+
     // ── Screen capture command ────────────────────────────────────────────────
 
     [RelayCommand]
     private void CaptureScreen()
     {
         _screenCaptureService.CaptureScreenToShelf();
-        SelectedTabIndex = 1; // Open Shelf tab
-        ShelfSubTabIndex = 0; // Show Staged Files
+        SelectedTabIndex = 2; // Open Shelf tab (Dock & Clipboard)
     }
 
     // ── Audio commands ────────────────────────────────────────────────────────
@@ -462,7 +779,9 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand]
     private void ToggleDriveMenu()
     {
-        IsDriveMenuOpen = !IsDriveMenuOpen;
+        bool next = !IsDriveMenuOpen;
+        CloseAllMenus();
+        IsDriveMenuOpen = next;
     }
 
     [RelayCommand]
@@ -479,11 +798,31 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand]
     private void ToggleAudioDeviceMenu()
     {
-        IsAudioDeviceMenuOpen = !IsAudioDeviceMenuOpen;
-        if (IsAudioDeviceMenuOpen)
+        bool next = !IsAudioDeviceMenuOpen;
+        CloseAllMenus();
+        IsAudioDeviceMenuOpen = next;
+        if (next)
         {
             RefreshAudioDevices();
         }
+    }
+
+    [RelayCommand]
+    private void ToggleBottomAudioMenu()
+    {
+        bool next = !IsBottomAudioMenuOpen;
+        CloseAllMenus();
+        IsBottomAudioMenuOpen = next;
+        if (next)
+        {
+            RefreshAudioDevices();
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleActiveTimer()
+    {
+        _timerService.ToggleActiveTimer();
     }
 
     [RelayCommand]
@@ -493,6 +832,7 @@ public sealed partial class NotchViewModel : ObservableObject
         {
             _audioService.SetDefaultPlaybackDevice(item.Id);
             IsAudioDeviceMenuOpen = false;
+            IsBottomAudioMenuOpen = false;
             UpdateAudioDeviceInfo();
         }
     }
@@ -517,7 +857,7 @@ public sealed partial class NotchViewModel : ObservableObject
         int btBattery = _audioService.GetActiveBluetoothBatteryPercent();
         if (btBattery > 0)
         {
-            BluetoothBatteryText = $"🔋 {btBattery}%";
+            BluetoothBatteryText = $"{btBattery}%";
             HasBluetoothBattery  = true;
         }
         else
@@ -563,6 +903,57 @@ public sealed partial class NotchViewModel : ObservableObject
 
     // ── Quick tool commands ───────────────────────────────────────────────────
 
+    public void RefreshSettingsBindings()
+    {
+        OnPropertyChanged(nameof(IsDualActivity));
+        OnPropertyChanged(nameof(IsMediaOnlyActivity));
+        OnPropertyChanged(nameof(IsTimerOnlyActivity));
+        OnPropertyChanged(nameof(IsVerticalDock));
+        OnPropertyChanged(nameof(IsHorizontalDock));
+    }
+
+    partial void OnScratchpadTextChanged(string value)
+    {
+        _scratchpadSaveTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _scratchpadSaveTimer.Stop();
+        _scratchpadSaveTimer.Tick -= OnScratchpadSaveTick;
+        _scratchpadSaveTimer.Tick += OnScratchpadSaveTick;
+        _scratchpadSaveTimer.Start();
+    }
+
+    private void OnScratchpadSaveTick(object? sender, EventArgs e)
+    {
+        _scratchpadSaveTimer?.Stop();
+        _scratchpadService.Save(ScratchpadText);
+    }
+
+    [RelayCommand]
+    private void ToggleStayAwake() => _powerAwakeService.Toggle();
+
+    [RelayCommand]
+    private void OpenScreenshotsFolder() => _screenCaptureService.OpenScreenshotsFolder();
+
+    [RelayCommand]
+    private async Task CopyScratchpad()
+    {
+        if (string.IsNullOrEmpty(ScratchpadText)) return;
+        try
+        {
+            Clipboard.SetText(ScratchpadText);
+            ScratchpadCopied = true;
+            await Task.Delay(1200);
+            ScratchpadCopied = false;
+        }
+        catch { /* clipboard busy */ }
+    }
+
+    [RelayCommand]
+    private void ClearScratchpad()
+    {
+        ScratchpadText = string.Empty;
+        _scratchpadService.Save(string.Empty);
+    }
+
     [RelayCommand] private void OpenSettings() => OpenSettingsRequested?.Invoke();
 
     [RelayCommand]
@@ -604,6 +995,7 @@ public sealed partial class NotchViewModel : ObservableObject
         var now   = DateTime.Now;
         ClockText = now.ToString("HH:mm");
         DateText  = now.ToString("ddd, MMM d");
+        _calendarService.CheckDueReminders(now);
     }
 
     private void StopClock()

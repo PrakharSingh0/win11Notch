@@ -77,6 +77,7 @@ public sealed class ResourceMonitorService : IDisposable
     public double RamTotalGb           { get; private set; }
     public int    GpuPercent           { get; private set; }
     public double VramUsedGb           { get; private set; }
+    public double VramTotalGb          { get; private set; }
     public int    DiskPercent          { get; private set; }
     public double DownloadBytesPerSec  { get; private set; }
     public double UploadBytesPerSec    { get; private set; }
@@ -167,6 +168,36 @@ public sealed class ResourceMonitorService : IDisposable
     {
         if (_gpuCountersInitialized) return;
         _gpuCountersInitialized = true;
+
+        try
+        {
+            // Read max dedicated GPU adapter VRAM capacity once from display class registry
+            using var classKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+            if (classKey != null)
+            {
+                ulong maxBytes = 0;
+                foreach (var subName in classKey.GetSubKeyNames())
+                {
+                    if (!char.IsDigit(subName[0])) continue;
+                    try
+                    {
+                        using var sub = classKey.OpenSubKey(subName);
+                        if (sub == null) continue;
+                        var qw = sub.GetValue("HardwareInformation.qwMemorySize");
+                        if (qw is long l && l > 0) maxBytes = Math.Max(maxBytes, (ulong)l);
+                        else if (qw is byte[] b && b.Length == 8) maxBytes = Math.Max(maxBytes, BitConverter.ToUInt64(b, 0));
+                        else if (sub.GetValue("HardwareInformation.MemorySize") is int dw && dw > 0) maxBytes = Math.Max(maxBytes, (ulong)(uint)dw);
+                    }
+                    catch { }
+                }
+                if (maxBytes > 0)
+                {
+                    VramTotalGb = Math.Round(maxBytes / (1024.0 * 1024.0 * 1024.0), 1);
+                }
+            }
+        }
+        catch { }
 
         try
         {

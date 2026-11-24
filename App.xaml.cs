@@ -29,6 +29,7 @@ public partial class App : Application
     private AudioHudService?           _audioHud;
     private ResourceMonitorService?    _resourceMonitor;
     private IslandNotificationService? _islandNotifications;
+    private PowerAwakeService?         _powerAwakeService;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -91,10 +92,15 @@ public partial class App : Application
 
             _resourceMonitor      = new ResourceMonitorService();
             var clipboardService  = new ClipboardService();
-            var screenCapture     = new ScreenCaptureService(shelfService);
+            var screenCapture     = new ScreenCaptureService(shelfService, monitor, settings);
 
             var hotkeyService     = new HotkeyService();
             var fullscreenService = new FullscreenDetectorService(stateMachine);
+            var timerService      = new TimerService();
+            timerService.ApplySettings(settings.Current);
+            _powerAwakeService    = new PowerAwakeService();
+            var scratchpadService = new ScratchpadService();
+            var calendarService   = new CalendarService();
 
             var notchVm = new NotchViewModel(
                 stateMachine,
@@ -103,13 +109,19 @@ public partial class App : Application
                 _audioService,
                 _resourceMonitor,
                 clipboardService,
-                screenCapture);
+                screenCapture,
+                timerService,
+                settings,
+                _powerAwakeService,
+                scratchpadService,
+                calendarService);
 
             _islandNotifications = new IslandNotificationService(stateMachine, _mediaService, settings, notchVm);
             _audioHud            = new AudioHudService(stateMachine, _audioService, notchVm);
 
             var trayVm     = new TrayViewModel(stateMachine, settings);
             var settingsVm = new SettingsViewModel(settings, startupService);
+            settingsVm.SettingsChanged += () => timerService.ApplySettings(settings.Current);
 
             Log("Constructing NotchWindow...");
             _notchWindow = new NotchWindow(
@@ -167,6 +179,7 @@ public partial class App : Application
         _islandNotifications?.Dispose();
         _mediaService?.Dispose();
         _resourceMonitor?.Dispose();
+        _powerAwakeService?.Dispose();
         base.OnExit(e);
     }
 }

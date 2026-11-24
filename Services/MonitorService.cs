@@ -6,17 +6,27 @@ namespace Win11Notch.Services;
 
 public sealed class MonitorItem
 {
-    public int    Index     { get; init; }
-    public string Name      { get; init; } = string.Empty;
-    public bool   IsPrimary { get; init; }
-    public double Left      { get; init; }
-    public double Top       { get; init; }
-    public double Width     { get; init; }
-    public double Height    { get; init; }
-    public double WorkLeft  { get; init; }
-    public double WorkTop   { get; init; }
-    public double WorkWidth { get; init; }
-    public double WorkHeight{ get; init; }
+    public int    Index      { get; init; }
+    public string Name       { get; init; } = string.Empty;
+    public bool   IsPrimary  { get; init; }
+    public IntPtr Handle     { get; init; }
+    public double DpiScale   { get; init; } = 1.0;
+
+    // Logical DIP bounds for WPF Window positioning
+    public double Left       { get; init; }
+    public double Top        { get; init; }
+    public double Width      { get; init; }
+    public double Height     { get; init; }
+    public double WorkLeft   { get; init; }
+    public double WorkTop    { get; init; }
+    public double WorkWidth  { get; init; }
+    public double WorkHeight { get; init; }
+
+    // Physical pixel bounds for GDI / BitBlt screen capture
+    public int    PhysLeft   { get; init; }
+    public int    PhysTop    { get; init; }
+    public int    PhysWidth  { get; init; }
+    public int    PhysHeight { get; init; }
 }
 
 /// <summary>
@@ -50,6 +60,22 @@ public sealed class MonitorService
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
 
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    private static double GetMonitorDpiScale(IntPtr hMonitor)
+    {
+        try
+        {
+            if (GetDpiForMonitor(hMonitor, 0 /* MDT_EFFECTIVE_DPI */, out uint dpiX, out _) == 0 && dpiX >= 96)
+            {
+                return dpiX / 96.0;
+            }
+        }
+        catch { /* fallback for older OS builds */ }
+        return 1.0;
+    }
+
     public IReadOnlyList<MonitorItem> GetMonitors()
     {
         var list = new List<MonitorItem>();
@@ -61,26 +87,34 @@ public sealed class MonitorService
             if (GetMonitorInfo(hMon, ref mi))
             {
                 bool isPrimary = (mi.dwFlags & 1 /* MONITORINFOF_PRIMARY */) != 0;
-                double w = mi.rcMonitor.Right - mi.rcMonitor.Left;
-                double h = mi.rcMonitor.Bottom - mi.rcMonitor.Top;
-                double ww = mi.rcWork.Right - mi.rcWork.Left;
-                double wh = mi.rcWork.Bottom - mi.rcWork.Top;
+                int pw  = mi.rcMonitor.Right - mi.rcMonitor.Left;
+                int ph  = mi.rcMonitor.Bottom - mi.rcMonitor.Top;
+                int pww = mi.rcWork.Right - mi.rcWork.Left;
+                int pwh = mi.rcWork.Bottom - mi.rcWork.Top;
 
-                string label = isPrimary ? $"Primary Display ({w:F0}×{h:F0})" : $"Display {index} ({w:F0}×{h:F0})";
+                double scale = GetMonitorDpiScale(hMon);
+
+                string label = isPrimary ? $"Primary Display ({pw}×{ph})" : $"Display {index} ({pw}×{ph})";
 
                 list.Add(new MonitorItem
                 {
                     Index      = index,
                     Name       = label,
                     IsPrimary  = isPrimary,
-                    Left       = mi.rcMonitor.Left,
-                    Top        = mi.rcMonitor.Top,
-                    Width      = w,
-                    Height     = h,
-                    WorkLeft   = mi.rcWork.Left,
-                    WorkTop    = mi.rcWork.Top,
-                    WorkWidth  = ww,
-                    WorkHeight = wh
+                    Handle     = hMon,
+                    DpiScale   = scale,
+                    Left       = mi.rcMonitor.Left / scale,
+                    Top        = mi.rcMonitor.Top  / scale,
+                    Width      = pw  / scale,
+                    Height     = ph  / scale,
+                    WorkLeft   = mi.rcWork.Left / scale,
+                    WorkTop    = mi.rcWork.Top  / scale,
+                    WorkWidth  = pww / scale,
+                    WorkHeight = pwh / scale,
+                    PhysLeft   = mi.rcMonitor.Left,
+                    PhysTop    = mi.rcMonitor.Top,
+                    PhysWidth  = pw,
+                    PhysHeight = ph
                 });
                 index++;
             }
@@ -88,6 +122,14 @@ public sealed class MonitorService
         }, IntPtr.Zero);
 
         return list;
+    }
+
+    public MonitorItem? GetTargetMonitor(int monitorIndex = 0)
+    {
+        var monitors = GetMonitors();
+        return (monitorIndex > 0 && monitorIndex <= monitors.Count)
+            ? monitors[monitorIndex - 1]
+            : monitors.FirstOrDefault(m => m.IsPrimary) ?? (monitors.Count > 0 ? monitors[0] : null);
     }
 
     public (double Width, double Height) GetDimensions(
@@ -100,16 +142,20 @@ public sealed class MonitorService
         bool isStopwatchRunning = false,
         int handleWidth = 72,
         int handleThickness = 8,
-        bool dynamicSizing = true)
+        bool dynamicSizing = true,
+        bool dualActivityEnabled = true,
+        bool hasBluetoothBattery = false)
     {
         bool isVerticalEdge = dockEdge is "Left" or "Right";
         int hw = Math.Clamp(handleWidth, 40, 200);
         int ht = Math.Clamp(handleThickness, 4, 16);
 
+        bool isDualActivity = dualActivityEnabled && isMediaPlaying && isStopwatchRunning;
+
         double hoverWidth;
         if (!dynamicSizing)
         {
-            hoverWidth = (isVolumeToast || isPowerToast) ? 290 : (isMediaToast ? 370 : 280);
+            hoverWidth = (isVolumeToast || isPowerToast) ? 290 : (isMediaToast ? 370 : 300);
         }
         else if (isVolumeToast || isPowerToast)
         {
@@ -119,40 +165,44 @@ public sealed class MonitorService
         {
             hoverWidth = 370;
         }
-        else if (isMediaPlaying && isStopwatchRunning)
+        else if (isDualActivity)
         {
-            hoverWidth = 450;
+            hoverWidth = 455;
         }
         else if (isMediaPlaying)
         {
-            hoverWidth = 370;
+            hoverWidth = 375;
         }
         else if (isStopwatchRunning)
         {
-            hoverWidth = 310;
+            hoverWidth = 315;
         }
         else
         {
-            hoverWidth = 270; // minimal clock, date & network badge capsule
+            hoverWidth = 275; // minimal clock, date & network badge capsule
         }
+
+        if (hasBluetoothBattery && !isVolumeToast && !isPowerToast)
+        {
+            hoverWidth += 54;
+        }
+
+        int idleWidth = isDualActivity ? 230 : 164;
 
         return state switch
         {
             NotchState.Idle => (isMediaPlaying || isStopwatchRunning)
-                ? (isVerticalEdge ? (22, 160) : (160, 22))
+                ? (isVerticalEdge ? (24, idleWidth) : (idleWidth, 24))
                 : (isVerticalEdge ? (ht, hw) : (hw, ht)),
-            NotchState.CollapsedHover => isVerticalEdge ? (42, hoverWidth) : (hoverWidth, 42),
-            NotchState.PeekExpanded => isVerticalEdge ? (390, 650) : (650, 390),
-            _ => isVerticalEdge ? (ht, hw) : (hw, ht)
+            NotchState.CollapsedHover => (hoverWidth, 44),
+            NotchState.PeekExpanded   => (680, 412),
+            _                         => isVerticalEdge ? (ht, hw) : (hw, ht)
         };
     }
 
     public (double Left, double Top) ComputePosition(string dockEdge, double windowWidth, double windowHeight, int monitorIndex = 0)
     {
-        var monitors = GetMonitors();
-        var target = (monitorIndex > 0 && monitorIndex <= monitors.Count)
-            ? monitors[monitorIndex - 1]
-            : monitors.FirstOrDefault(m => m.IsPrimary) ?? (monitors.Count > 0 ? monitors[0] : null);
+        var target = GetTargetMonitor(monitorIndex);
 
         if (target != null)
         {

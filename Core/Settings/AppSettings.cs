@@ -50,4 +50,19 @@ public sealed class AppSettings
 
     /// <summary>Whether CollapsedHover dynamically sizes to fit active content.</summary>
     public bool DynamicContentSizing { get; set; } = true;
+
+    /// <summary>Default focus duration in minutes for Pomodoro.</summary>
+    public int DefaultFocusMinutes { get; set; } = 25;
+
+    /// <summary>Default break duration in minutes for Pomodoro.</summary>
+    public int DefaultBreakMinutes { get; set; } = 5;
+
+    /// <summary>Daily water intake target in cups (250ml each).</summary>
+    public int DailyWaterTargetCups { get; set; } = 8;
+
+    /// <summary>Whether sound chimes play on timer/pomodoro completion.</summary>
+    public bool TimerSoundChimesEnabled { get; set; } = true;
+
+    /// <summary>Whether to show dual-activity split presentation when music and timers run concurrently.</summary>
+    public bool DualActivityEnabled { get; set; } = true;
 }
