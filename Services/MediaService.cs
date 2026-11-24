@@ -140,6 +140,41 @@ public sealed class MediaService : IDisposable
                 }
 
                 Thumbnail = loadedThumb ?? GenerateFallbackThumbnail(Title, Artist);
+
+                if (loadedThumb == null)
+                {
+                    // Multi-stage retry for delayed cover art from Chromium, Edge, Spotify
+                    string capturedTitle = Title;
+                    string capturedArtist = Artist;
+                    _ = Task.Run(async () =>
+                    {
+                        int[] delays = { 250, 600, 1200 };
+                        foreach (int delay in delays)
+                        {
+                            await Task.Delay(delay);
+                            if (Title != capturedTitle) break; // Track changed
+                            try
+                            {
+                                var s = _currentSession ?? GetBestSession();
+                                if (s != null)
+                                {
+                                    var p = await s.TryGetMediaPropertiesAsync();
+                                    if (p?.Thumbnail != null)
+                                    {
+                                        var retryThumb = await LoadThumbnailAsync(p.Thumbnail);
+                                        if (retryThumb != null && Title == capturedTitle)
+                                        {
+                                            Thumbnail = retryThumb;
+                                            NotifyMediaChanged();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
+                    });
+                }
             }
             else
             {
@@ -236,32 +271,64 @@ public sealed class MediaService : IDisposable
         try
         {
             using var stream = await thumbnailRef.OpenReadAsync();
-            using var netStream = stream.AsStreamForRead();
-            using var ms = new MemoryStream();
-            await netStream.CopyToAsync(ms);
-            var bytes = ms.ToArray();
-            if (bytes.Length == 0) return null;
+            if (stream == null || stream.Size == 0) return null;
 
-            if (Application.Current?.Dispatcher != null)
+            // Strategy 1: WinRT native BitmapDecoder — handles WebP (YouTube/Chrome), AVIF, JPEG, PNG seamlessly
+            try
             {
-                return await Application.Current.Dispatcher.InvokeAsync(() =>
+                var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+                var pixelData = await decoder.GetPixelDataAsync(
+                    Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                    Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                    new Windows.Graphics.Imaging.BitmapTransform(),
+                    Windows.Graphics.Imaging.ExifOrientationMode.RespectExifOrientation,
+                    Windows.Graphics.Imaging.ColorManagementMode.ColorManageToSRgb);
+
+                byte[] pixels = pixelData.DetachPixelData();
+                int width = (int)decoder.PixelWidth;
+                int height = (int)decoder.PixelHeight;
+                int stride = width * 4;
+
+                if (Application.Current?.Dispatcher != null && width > 0 && height > 0)
                 {
-                    try
+                    return await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                        bitmap.CacheOption   = BitmapCacheOption.OnLoad;
-                        bitmap.StreamSource  = new MemoryStream(bytes);
-                        bitmap.EndInit();
-                        bitmap.Freeze();
-                        return (ImageSource)bitmap;
-                    }
-                    catch
+                        var bsource = BitmapSource.Create(width, height, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+                        bsource.Freeze();
+                        return (ImageSource)bsource;
+                    });
+                }
+            }
+            catch
+            {
+                // Strategy 2: Fallback to standard WIC BitmapImage if WinRT decoder is unavailable
+                stream.Seek(0);
+                using var netStream = stream.AsStreamForRead();
+                using var ms = new MemoryStream();
+                await netStream.CopyToAsync(ms);
+
+                if (ms.Length > 0 && Application.Current?.Dispatcher != null)
+                {
+                    var bytes = ms.ToArray();
+                    return await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        return null;
-                    }
-                });
+                        try
+                        {
+                            var bitmap = new BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                            bitmap.CacheOption   = BitmapCacheOption.OnLoad;
+                            bitmap.StreamSource  = new MemoryStream(bytes);
+                            bitmap.EndInit();
+                            bitmap.Freeze();
+                            return (ImageSource)bitmap;
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    });
+                }
             }
         }
         catch { /* thumbnail stream unavailable or unreadable */ }
@@ -275,35 +342,55 @@ public sealed class MediaService : IDisposable
             var visual = new DrawingVisual();
             using (var dc = visual.RenderOpen())
             {
-                // Dark-slate gradient background (#282E38 to #14161C)
-                var grad = new LinearGradientBrush(
-                    Color.FromRgb(0x28, 0x2E, 0x38),
-                    Color.FromRgb(0x14, 0x16, 0x1C),
-                    new Point(0, 0),
-                    new Point(1, 1));
-                dc.DrawRoundedRectangle(grad, null, new Rect(0, 0, 100, 100), 12, 12);
+                // Deterministic vibrant palette based on track hash
+                int hash = Math.Abs((title + artist).GetHashCode());
+                var (c1, c2) = (hash % 6) switch
+                {
+                    0 => (Color.FromRgb(0x8A, 0x23, 0x87), Color.FromRgb(0xE9, 0x40, 0x57)), // Sunset Neon
+                    1 => (Color.FromRgb(0x00, 0x7C, 0xF0), Color.FromRgb(0x00, 0xDF, 0xD8)), // Electric Cyan
+                    2 => (Color.FromRgb(0x79, 0x28, 0xCA), Color.FromRgb(0xFF, 0x00, 0x80)), // Cyber Magenta
+                    3 => (Color.FromRgb(0x11, 0x99, 0x8E), Color.FromRgb(0x38, 0xEF, 0x7D)), // Emerald Aurora
+                    4 => (Color.FromRgb(0xF8, 0x57, 0xA6), Color.FromRgb(0xFF, 0x58, 0x58)), // Ruby Glow
+                    _ => (Color.FromRgb(0x4E, 0x54, 0xC8), Color.FromRgb(0x8F, 0x94, 0xFB))  // Deep Indigo
+                };
 
-                // Specular border (#30FFFFFF)
-                var borderPen = new Pen(new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)), 1.0);
-                dc.DrawRoundedRectangle(null, borderPen, new Rect(0.5, 0.5, 99, 99), 12, 12);
+                // Rich gradient cover art background
+                var bgBrush = new LinearGradientBrush(c1, c2, new Point(0, 0), new Point(1, 1));
+                dc.DrawRoundedRectangle(bgBrush, null, new Rect(0, 0, 100, 100), 12, 12);
 
-                // Music note icon or letter initial
-                string initial = !string.IsNullOrWhiteSpace(title) && char.IsLetterOrDigit(title[0])
-                    ? title[0].ToString().ToUpperInvariant()
-                    : "🎵";
+                // Vinyl groove rings for genuine album record look
+                var groovePen = new Pen(new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)), 1.2);
+                dc.DrawEllipse(null, groovePen, new Point(50, 50), 38, 38);
+                dc.DrawEllipse(null, groovePen, new Point(50, 50), 28, 28);
+                dc.DrawEllipse(null, groovePen, new Point(50, 50), 18, 18);
 
+                // Center disc hub
+                var centerBrush = new SolidColorBrush(Color.FromArgb(0x60, 0x00, 0x00, 0x00));
+                var centerPen = new Pen(new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), 1.0);
+                dc.DrawEllipse(centerBrush, centerPen, new Point(50, 50), 14, 14);
+
+                // Icon in center
                 var ft = new FormattedText(
-                    initial,
+                    "🎵",
                     System.Globalization.CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily("Segoe UI Variable Display, Segoe UI, sans-serif"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
-                    initial.Length == 1 && initial != "🎵" ? 36 : 28,
-                    new SolidColorBrush(Color.FromArgb(0xD0, 0xFF, 0xFF, 0xFF)),
+                    new Typeface("Segoe UI Emoji"),
+                    14,
+                    Brushes.White,
                     1.0);
+                dc.DrawText(ft, new Point(50 - ft.Width / 2.0, 50 - ft.Height / 2.0));
 
-                double tx = (100 - ft.Width) / 2.0;
-                double ty = (100 - ft.Height) / 2.0;
-                dc.DrawText(ft, new Point(tx, ty));
+                // Diagonal specular glass gloss
+                var glossBrush = new LinearGradientBrush(
+                    Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF),
+                    Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF),
+                    new Point(0, 0),
+                    new Point(1, 0.7));
+                dc.DrawRoundedRectangle(glossBrush, null, new Rect(0, 0, 100, 50), 12, 12);
+
+                // Crisp 1px specular border
+                var borderPen = new Pen(new SolidColorBrush(Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF)), 1.0);
+                dc.DrawRoundedRectangle(null, borderPen, new Rect(0.5, 0.5, 99, 99), 12, 12);
             }
 
             var rtb = new RenderTargetBitmap(100, 100, 96, 96, PixelFormats.Pbgra32);

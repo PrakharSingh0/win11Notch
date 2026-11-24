@@ -13,10 +13,10 @@ public sealed class AppSettings
     public string DockEdge { get; set; } = "Top";
 
     /// <summary>Milliseconds of hover dwell before CollapsedHover activates.</summary>
-    public int HoverDwellMs { get; set; } = 100;
+    public int HoverDwellMs { get; set; } = 60;
 
     /// <summary>Milliseconds of grace period before CollapsedHover collapses after mouse-leave.</summary>
-    public int ExitGraceMs { get; set; } = 300;
+    public int ExitGraceMs { get; set; } = 120;
 
     /// <summary>Alpha for the WPF IPS tint overlay (0–1). 0.70 = 70% opaque dark-slate.</summary>
     public double AcrylicTintOpacity { get; set; } = 0.70;
@@ -32,4 +32,22 @@ public sealed class AppSettings
 
     /// <summary>Global hotkey preset (e.g. "Alt+Space", "Win+Z", "Ctrl+Shift+Space", "Ctrl+~").</summary>
     public string HotkeyPreset { get; set; } = "Alt+Space";
+
+    /// <summary>Target monitor index (0 = Primary, 1 = Display 1, 2 = Display 2...).</summary>
+    public int TargetMonitorIndex { get; set; } = 0;
+
+    /// <summary>Idle pill width in pixels (40–180). Default 72.</summary>
+    public int HandleWidth { get; set; } = 72;
+
+    /// <summary>Idle pill thickness/height in pixels (4–16). Default 8.</summary>
+    public int HandleThickness { get; set; } = 8;
+
+    /// <summary>Idle pill background tint hex color. Default "#E61A1C20".</summary>
+    public string HandleColor { get; set; } = "#E61A1C20";
+
+    /// <summary>Border animation effect preset: "None" | "BreathingGlow" | "RainbowWave" | "NeonGlow". Default "None".</summary>
+    public string BorderAnimationPreset { get; set; } = "None";
+
+    /// <summary>Whether CollapsedHover dynamically sizes to fit active content.</summary>
+    public bool DynamicContentSizing { get; set; } = true;
 }

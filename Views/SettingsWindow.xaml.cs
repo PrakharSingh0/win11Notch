@@ -22,7 +22,7 @@ public partial class SettingsWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        AcrylicHelper.Apply(hwnd);
+        AcrylicHelper.ApplyLegacyAcrylic(hwnd);
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

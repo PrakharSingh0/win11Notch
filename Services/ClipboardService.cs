@@ -2,15 +2,17 @@ using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Win11Notch.Services;
 
-public sealed class ClipboardItem
+public sealed partial class ClipboardItem : ObservableObject
 {
     public string   Text      { get; init; } = string.Empty;
     public string   Preview   { get; init; } = string.Empty;
     public DateTime Timestamp { get; init; } = DateTime.Now;
-    public bool     IsPinned  { get; set; }
+    [ObservableProperty] private bool _isPinned;
+    [ObservableProperty] private bool _isCopied;
 }
 
 /// <summary>

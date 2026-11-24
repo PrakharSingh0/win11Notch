@@ -232,9 +232,16 @@ public sealed class AudioService : IDisposable
         InitEndpoint();
     }
 
+    private int _cachedBtBattery = -1;
+    private bool _isQueryingBtBattery;
+    private DateTime _lastBtCheck = DateTime.MinValue;
+
     public void RefreshActiveDevice()
     {
-        InitEndpoint();
+        if (_cachedEndpoint == null)
+        {
+            InitEndpoint();
+        }
     }
 
     private void OnDefaultPlaybackDeviceChanged()
@@ -270,8 +277,12 @@ public sealed class AudioService : IDisposable
                     string detectedName = QueryFriendlyName(device);
                     if (!string.IsNullOrWhiteSpace(detectedName))
                     {
+                        bool changed = !string.Equals(ActiveDeviceName, detectedName, StringComparison.Ordinal);
                         ActiveDeviceName = detectedName;
-                        ActiveDeviceChanged?.Invoke(ActiveDeviceName);
+                        if (changed)
+                        {
+                            ActiveDeviceChanged?.Invoke(ActiveDeviceName);
+                        }
                     }
 
                     // Activate endpoint volume
@@ -454,6 +465,48 @@ public sealed class AudioService : IDisposable
         {
             return false;
         }
+    }
+
+    public int GetActiveBluetoothBatteryPercent()
+    {
+        if ((DateTime.UtcNow - _lastBtCheck).TotalSeconds > 15 && !_isQueryingBtBattery)
+        {
+            _isQueryingBtBattery = true;
+            _lastBtCheck = DateTime.UtcNow;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    const string BatteryPropertyKey = "{104ea319-6ee2-4701-bd47-8ddbf425bbe5} 2";
+                    var devs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(
+                        Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromPairingState(true),
+                        new[] { BatteryPropertyKey });
+                    int found = -1;
+                    if (devs != null)
+                    {
+                        foreach (var dev in devs)
+                        {
+                            if (dev.Properties.TryGetValue(BatteryPropertyKey, out var val) && val != null)
+                            {
+                                int percent = Convert.ToInt32(val);
+                                if (percent > 0 && percent <= 100)
+                                {
+                                    found = percent;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    _cachedBtBattery = found;
+                }
+                catch { }
+                finally
+                {
+                    _isQueryingBtBattery = false;
+                }
+            });
+        }
+        return _cachedBtBattery;
     }
 
     public void Dispose()

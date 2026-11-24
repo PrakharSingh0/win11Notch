@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Win11Notch.Core.State;
+using Win11Notch.Models;
 using Win11Notch.Services;
 
 namespace Win11Notch.ViewModels;
@@ -66,10 +68,44 @@ public sealed partial class NotchViewModel : ObservableObject
     partial void OnIsPowerToastActiveChanged(bool value) => PowerToastActiveChanged?.Invoke(value);
 
     // Resource properties
-    [ObservableProperty] private int          _cpuPercent;
-    [ObservableProperty] private int          _memoryPercent;
-    [ObservableProperty] private int          _batteryPercent         = 100;
-    [ObservableProperty] private bool         _isCharging;
+    [ObservableProperty] private int             _cpuPercent;
+    [ObservableProperty] private int             _memoryPercent;
+    [ObservableProperty] private string          _ramText             = "0.0 / 0.0 GB";
+    [ObservableProperty] private int             _gpuPercent;
+    [ObservableProperty] private string          _vramText            = "0.00 GB";
+    [ObservableProperty] private string          _networkName         = "WiFi";
+    [ObservableProperty] private string          _networkDetail       = "Wi-Fi - Connected";
+    [ObservableProperty] private string          _downloadSpeedText   = "0 B/s";
+    [ObservableProperty] private string          _uploadSpeedText     = "0 B/s";
+    [ObservableProperty] private int             _batteryPercent      = 100;
+    [ObservableProperty] private bool            _isCharging;
+    [ObservableProperty] private string          _batteryStatusText   = "Fully charged";
+    [ObservableProperty] private string          _batteryHealthText   = "Health 100%";
+
+    // Storage partitions
+    public ObservableCollection<DriveItem>       Drives               => _resourceMonitor.Drives;
+    [ObservableProperty] private DriveItem?      _selectedDrive;
+    [ObservableProperty] private bool            _isDriveMenuOpen;
+
+    // Connected Audio Device & Bluetooth Battery
+    [ObservableProperty] private string          _bluetoothBatteryText = string.Empty;
+    [ObservableProperty] private bool            _hasBluetoothBattery;
+
+    // Sparkline Graph & Area Point Collections
+    [ObservableProperty] private PointCollection _cpuGraphPoints      = new();
+    [ObservableProperty] private PointCollection _cpuAreaPoints       = new();
+    [ObservableProperty] private PointCollection _ramGraphPoints      = new();
+    [ObservableProperty] private PointCollection _ramAreaPoints       = new();
+    [ObservableProperty] private PointCollection _gpuGraphPoints      = new();
+    [ObservableProperty] private PointCollection _gpuAreaPoints       = new();
+    [ObservableProperty] private int             _diskPercent;
+    [ObservableProperty] private PointCollection _diskGraphPoints      = new();
+    [ObservableProperty] private PointCollection _diskAreaPoints       = new();
+    [ObservableProperty] private PointCollection _downloadGraphPoints = new();
+    [ObservableProperty] private PointCollection _downloadAreaPoints  = new();
+    [ObservableProperty] private PointCollection _uploadGraphPoints   = new();
+    [ObservableProperty] private PointCollection _uploadAreaPoints    = new();
+    [ObservableProperty] private bool            _isResourceVolumeMode;
 
     // Shelf badge
     [ObservableProperty] private bool         _hasStagedFiles;
@@ -85,8 +121,11 @@ public sealed partial class NotchViewModel : ObservableObject
     public event Action? OpenSettingsRequested;
 
     // Collections
-    public ObservableCollection<ShelfItem>     ShelfItems       => _shelfService.Items;
-    public ObservableCollection<ClipboardItem> ClipboardHistory => _clipboardService.History;
+    public ObservableCollection<ShelfItem>     ShelfItems               => _shelfService.Items;
+    public ObservableCollection<ClipboardItem> ClipboardHistory         => _clipboardService.History;
+    public ObservableCollection<ClipboardItem> FilteredClipboardHistory { get; } = new();
+
+    [ObservableProperty] private string _clipboardSearchText = string.Empty;
 
     private DispatcherTimer? _clockTimer;
     private DispatcherTimer? _timelineTimer;
@@ -122,6 +161,10 @@ public sealed partial class NotchViewModel : ObservableObject
             ShelfCountText = _shelfService.Items.Count > 0 ? $"📦 {_shelfService.Items.Count}" : string.Empty;
         };
 
+        // Wire clipboard changes
+        _clipboardService.History.CollectionChanged += (_, _) => RefreshFilteredClipboard();
+        RefreshFilteredClipboard();
+
         // Sync initial volume and audio device
         _isSyncingVolume = true;
         try
@@ -139,7 +182,7 @@ public sealed partial class NotchViewModel : ObservableObject
         _audioService.ActiveDeviceChanged += name =>
         {
             ActiveAudioDeviceName = name;
-            RefreshAudioDevices();
+            RefreshAudioDevices(updateDeviceInfo: false);
         };
 
         _audioService.VolumeChanged += (vol, muted, _) =>
@@ -167,15 +210,15 @@ public sealed partial class NotchViewModel : ObservableObject
             else
                 StopClock();
 
-            // Resource monitoring & timeline updates run ONLY while Peek is expanded
-            if (state == NotchState.PeekExpanded)
+            // Resource monitoring runs while Hover or Peek is active (stopped in Idle)
+            if (state is NotchState.CollapsedHover or NotchState.PeekExpanded)
             {
                 _resourceMonitor.StartMonitoring();
                 _audioService.RefreshActiveDevice();
                 ActiveAudioDeviceName = _audioService.ActiveDeviceName;
                 _ = _mediaService.RefreshMediaInfoAsync();
 
-                if (IsMediaPlaying)
+                if (state == NotchState.PeekExpanded && IsMediaPlaying)
                 {
                     _timelineTimer.Start();
                 }
@@ -231,10 +274,99 @@ public sealed partial class NotchViewModel : ObservableObject
 
     private void OnResourceStatsUpdated()
     {
-        CpuPercent     = _resourceMonitor.CpuPercent;
-        MemoryPercent  = _resourceMonitor.MemoryPercent;
-        BatteryPercent = _resourceMonitor.BatteryPercent;
-        IsCharging     = _resourceMonitor.IsCharging;
+        CpuPercent         = _resourceMonitor.CpuPercent;
+        MemoryPercent      = _resourceMonitor.MemoryPercent;
+        RamText            = $"{_resourceMonitor.RamUsedGb:F1} / {_resourceMonitor.RamTotalGb:F1} GB";
+        GpuPercent         = _resourceMonitor.GpuPercent;
+        VramText           = _resourceMonitor.VramUsedGb > 0 ? $"{_resourceMonitor.VramUsedGb:F2} GB" : "Shared";
+        DiskPercent        = _resourceMonitor.DiskPercent;
+        NetworkName        = _resourceMonitor.NetworkName;
+        NetworkDetail      = _resourceMonitor.NetworkDetail;
+        DownloadSpeedText  = _resourceMonitor.DownloadSpeedText;
+        UploadSpeedText    = _resourceMonitor.UploadSpeedText;
+        BatteryPercent     = _resourceMonitor.BatteryPercent;
+        IsCharging         = _resourceMonitor.IsCharging;
+        BatteryStatusText  = _resourceMonitor.BatteryStatusText;
+        BatteryHealthText  = _resourceMonitor.BatteryHealthText;
+
+        // Sync selected drive & audio info
+        SelectedDrive = _resourceMonitor.SelectedDrive;
+        UpdateAudioDeviceInfo();
+
+        // Generate Sparkline line & area point collections
+        var (cpuL, cpuA) = GenerateGraphAndArea(_resourceMonitor.CpuHistory, 100, 20, 100);
+        CpuGraphPoints = cpuL;
+        CpuAreaPoints  = cpuA;
+
+        var (ramL, ramA) = GenerateGraphAndArea(_resourceMonitor.RamHistory, 100, 20, 100);
+        RamGraphPoints = ramL;
+        RamAreaPoints  = ramA;
+
+        var (gpuL, gpuA) = GenerateGraphAndArea(_resourceMonitor.GpuHistory, 100, 20, 100);
+        GpuGraphPoints = gpuL;
+        GpuAreaPoints  = gpuA;
+
+        var (diskL, diskA) = GenerateGraphAndArea(_resourceMonitor.DiskHistory, 100, 20, 100, autoScale: true);
+        DiskGraphPoints = diskL;
+        DiskAreaPoints  = diskA;
+
+        var (dnL, dnA)   = GenerateGraphAndArea(_resourceMonitor.DownloadHistory, 60, 16, 50, autoScale: true);
+        DownloadGraphPoints = dnL;
+        DownloadAreaPoints  = dnA;
+
+        var (upL, upA)   = GenerateGraphAndArea(_resourceMonitor.UploadHistory, 60, 16, 50, autoScale: true);
+        UploadGraphPoints = upL;
+        UploadAreaPoints  = upA;
+    }
+
+    private static (PointCollection line, PointCollection area) GenerateGraphAndArea(
+        IReadOnlyList<double> history, double width, double height, double maxVal, bool autoScale = false)
+    {
+        var line = new PointCollection();
+        var area = new PointCollection();
+
+        if (history == null || history.Count == 0)
+        {
+            line.Add(new Point(0, height - 2));
+            line.Add(new Point(width, height - 2));
+
+            area.Add(new Point(0, height));
+            area.Add(new Point(0, height - 2));
+            area.Add(new Point(width, height - 2));
+            area.Add(new Point(width, height));
+            return (line, area);
+        }
+
+        double effectiveMax = maxVal;
+        if (autoScale)
+        {
+            double peak = history.Max();
+            if (peak > 0)
+            {
+                effectiveMax = Math.Max(peak * 1.2, 10.0);
+            }
+        }
+
+        double dx = history.Count > 1 ? width / (history.Count - 1) : width;
+        area.Add(new Point(0, height)); // start at bottom-left
+
+        for (int i = 0; i < history.Count; i++)
+        {
+            double norm = Math.Clamp(history[i] / (effectiveMax > 0 ? effectiveMax : 100.0), 0.0, 1.0);
+            double y = height - (norm * (height - 4.0)) - 2.0;
+            var pt = new Point(i * dx, y);
+            line.Add(pt);
+            area.Add(pt);
+        }
+
+        area.Add(new Point(width, height)); // close at bottom-right
+        return (line, area);
+    }
+
+    [RelayCommand]
+    private void ToggleResourceCard4Mode()
+    {
+        IsResourceVolumeMode = !IsResourceVolumeMode;
     }
 
     // ── Media commands ────────────────────────────────────────────────────────
@@ -252,10 +384,53 @@ public sealed partial class NotchViewModel : ObservableObject
 
     // ── Clipboard commands ────────────────────────────────────────────────────
 
-    [RelayCommand] private void CopyClipboardItem(ClipboardItem item) => _clipboardService.CopyItem(item);
-    [RelayCommand] private void TogglePinClipboardItem(ClipboardItem item) => _clipboardService.TogglePin(item);
-    [RelayCommand] private void RemoveClipboardItem(ClipboardItem item) => _clipboardService.Remove(item);
-    [RelayCommand] private void ClearClipboardHistory() => _clipboardService.ClearUnpinned();
+    partial void OnClipboardSearchTextChanged(string value) => RefreshFilteredClipboard();
+
+    public void RefreshFilteredClipboard()
+    {
+        var q = ClipboardSearchText?.Trim();
+        var source = _clipboardService.History;
+        var filtered = string.IsNullOrEmpty(q)
+            ? source.OrderByDescending(i => i.IsPinned).ThenByDescending(i => i.Timestamp)
+            : source.Where(i => i.Text.Contains(q, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(i => i.IsPinned).ThenByDescending(i => i.Timestamp);
+
+        FilteredClipboardHistory.Clear();
+        foreach (var item in filtered)
+        {
+            FilteredClipboardHistory.Add(item);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyClipboardItem(ClipboardItem item)
+    {
+        _clipboardService.CopyItem(item);
+        item.IsCopied = true;
+        await Task.Delay(1200);
+        item.IsCopied = false;
+    }
+
+    [RelayCommand]
+    private void TogglePinClipboardItem(ClipboardItem item)
+    {
+        _clipboardService.TogglePin(item);
+        RefreshFilteredClipboard();
+    }
+
+    [RelayCommand]
+    private void RemoveClipboardItem(ClipboardItem item)
+    {
+        _clipboardService.Remove(item);
+        RefreshFilteredClipboard();
+    }
+
+    [RelayCommand]
+    private void ClearClipboardHistory()
+    {
+        _clipboardService.ClearUnpinned();
+        RefreshFilteredClipboard();
+    }
 
     // ── Screen capture command ────────────────────────────────────────────────
 
@@ -285,6 +460,23 @@ public sealed partial class NotchViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ToggleDriveMenu()
+    {
+        IsDriveMenuOpen = !IsDriveMenuOpen;
+    }
+
+    [RelayCommand]
+    private void SelectDrive(DriveItem? drive)
+    {
+        if (drive != null)
+        {
+            SelectedDrive = drive;
+            _resourceMonitor.SelectedDrive = drive;
+            IsDriveMenuOpen = false;
+        }
+    }
+
+    [RelayCommand]
     private void ToggleAudioDeviceMenu()
     {
         IsAudioDeviceMenuOpen = !IsAudioDeviceMenuOpen;
@@ -301,16 +493,37 @@ public sealed partial class NotchViewModel : ObservableObject
         {
             _audioService.SetDefaultPlaybackDevice(item.Id);
             IsAudioDeviceMenuOpen = false;
+            UpdateAudioDeviceInfo();
         }
     }
 
-    public void RefreshAudioDevices()
+    public void RefreshAudioDevices(bool updateDeviceInfo = true)
     {
         AudioDevices.Clear();
         var devices = _audioService.GetActivePlaybackDevices();
         foreach (var d in devices)
         {
             AudioDevices.Add(d);
+        }
+        if (updateDeviceInfo)
+        {
+            UpdateAudioDeviceInfo();
+        }
+    }
+
+    public void UpdateAudioDeviceInfo()
+    {
+        ActiveAudioDeviceName = _audioService.ActiveDeviceName;
+        int btBattery = _audioService.GetActiveBluetoothBatteryPercent();
+        if (btBattery > 0)
+        {
+            BluetoothBatteryText = $"🔋 {btBattery}%";
+            HasBluetoothBattery  = true;
+        }
+        else
+        {
+            BluetoothBatteryText = string.Empty;
+            HasBluetoothBattery  = false;
         }
     }
 

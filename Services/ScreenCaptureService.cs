@@ -23,33 +23,53 @@ public sealed class ScreenCaptureService
     public ScreenCaptureService(ShelfService shelfService)
     {
         _shelfService = shelfService;
-        _screenshotsFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Win11Notch", "Screenshots");
-
-        Directory.CreateDirectory(_screenshotsFolder);
+        try
+        {
+            _screenshotsFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Win11Notch", "Screenshots");
+            Directory.CreateDirectory(_screenshotsFolder);
+        }
+        catch
+        {
+            try
+            {
+                _screenshotsFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
+                Directory.CreateDirectory(_screenshotsFolder);
+            }
+            catch
+            {
+                _screenshotsFolder = Path.GetTempPath();
+            }
+        }
     }
 
     public string CaptureScreenToShelf()
     {
-        int width  = GetSystemMetrics(SM_CXSCREEN);
-        int height = GetSystemMetrics(SM_CYSCREEN);
-
-        string fileName = $"Snip_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-        string filePath = Path.Combine(_screenshotsFolder, fileName);
-
-        using (var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb))
+        try
         {
-            using (var g = Graphics.FromImage(bmp))
+            int width  = GetSystemMetrics(SM_CXSCREEN);
+            int height = GetSystemMetrics(SM_CYSCREEN);
+
+            string fileName = $"Snip_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+            string filePath = Path.Combine(_screenshotsFolder, fileName);
+
+            using (var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb))
             {
-                g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(0, 0, 0, 0, new System.Drawing.Size(width, height), CopyPixelOperation.SourceCopy);
+                }
+                bmp.Save(filePath, ImageFormat.Png);
             }
-            bmp.Save(filePath, ImageFormat.Png);
+
+            // Add directly to the Notch Drop Shelf
+            _shelfService.AddFiles(new[] { filePath });
+            return filePath;
         }
-
-        // Add directly to the Notch Drop Shelf
-        _shelfService.AddFiles(new[] { filePath });
-
-        return filePath;
+        catch
+        {
+            return string.Empty;
+        }
     }
 }

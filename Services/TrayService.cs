@@ -97,6 +97,31 @@ public sealed class TrayService : IDisposable
 
         UpdateDockChecks(_settings.Current.DockEdge);
 
+        var monitorMenu = new MenuItem { Header = "Target Monitor" };
+        var primaryMonitorItem = new MenuItem
+        {
+            Header = "Primary Monitor (Default)",
+            IsCheckable = true,
+            IsChecked = _settings.Current.TargetMonitorIndex == 0
+        };
+        primaryMonitorItem.Click += (_, _) => SelectMonitor(0);
+        monitorMenu.Items.Add(primaryMonitorItem);
+
+        var monitors = _monitor.GetMonitors();
+        foreach (var m in monitors)
+        {
+            int mIdx = m.Index;
+            var mItem = new MenuItem
+            {
+                Header = m.Name,
+                IsCheckable = true,
+                IsChecked = _settings.Current.TargetMonitorIndex == mIdx
+            };
+            mItem.Click += (_, _) => SelectMonitor(mIdx);
+            monitorMenu.Items.Add(mItem);
+        }
+        menu.Items.Add(monitorMenu);
+
         menu.Items.Add(new Separator());
 
         var settingsItem = new MenuItem { Header = "Settings..." };
@@ -128,6 +153,13 @@ public sealed class TrayService : IDisposable
         _settings.Current.DockEdge = edge;
         _ = _settings.SaveAsync();
         UpdateDockChecks(edge);
+        RepositionWindow();
+    }
+
+    private void SelectMonitor(int index)
+    {
+        _settings.Current.TargetMonitorIndex = index;
+        _ = _settings.SaveAsync();
         RepositionWindow();
     }
 

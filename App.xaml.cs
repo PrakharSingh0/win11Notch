@@ -15,13 +15,11 @@ public partial class App : Application
 
     public static void Log(string message)
     {
-#if DEBUG
         try
         {
             File.AppendAllText(LogFile, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
         }
         catch { }
-#endif
     }
 
     private TrayService?               _trayService;
@@ -39,12 +37,13 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
         {
             Log($"[CRASH] UnhandledException: {ev.ExceptionObject}");
-            try { File.WriteAllText("crash.log", ev.ExceptionObject.ToString()); } catch { }
+            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ev.ExceptionObject.ToString()); } catch { }
         };
         DispatcherUnhandledException += (s, ev) =>
         {
             Log($"[CRASH] DispatcherUnhandledException: {ev.Exception}");
-            try { File.WriteAllText("crash.log", ev.Exception.ToString()); } catch { }
+            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ev.Exception.ToString()); } catch { }
+            ev.Handled = true; // Prevent process abort on dispatcher exceptions
         };
 
         try
@@ -52,8 +51,8 @@ public partial class App : Application
             Log("Calling SingleInstanceGuard.TryAcquire()...");
             if (!SingleInstanceGuard.TryAcquire())
             {
-                Log("SingleInstanceGuard returned FALSE! Another instance is running. Shutting down.");
-                Shutdown();
+                Log("SingleInstanceGuard returned FALSE! Another instance is running. Terminating secondary process.");
+                Environment.Exit(0);
                 return;
             }
             Log("SingleInstanceGuard acquired successfully.");
@@ -142,7 +141,9 @@ public partial class App : Application
                     {
                         stateMachine.Toggle();
                     }
+                    _notchWindow?.Show();
                     _notchWindow?.Activate();
+                    _notchWindow?.Focus();
                 });
             });
 

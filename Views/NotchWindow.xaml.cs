@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Win11Notch.Core.Settings;
@@ -28,9 +29,10 @@ public partial class NotchWindow : Window
     private IntPtr          _hwnd;
     private Point           _dragStartPoint;
 
-    // Animation constants
-    private static readonly Duration  AnimDur = new(TimeSpan.FromMilliseconds(150));
-    private static readonly CubicEase Ease    = new() { EasingMode = EasingMode.EaseOut };
+    // Animation constants — Apple Dynamic Island fluid droplet physics
+    private static readonly BackEase    DropletExpandEase  = new() { Amplitude = 0.20, EasingMode = EasingMode.EaseOut };
+    private static readonly CubicEase   DropletRetractEase = new() { EasingMode = EasingMode.EaseOut };
+    private int _animGeneration;
 
     public NotchWindow(
         NotchViewModel           vm,
@@ -70,48 +72,83 @@ public partial class NotchWindow : Window
         _vm.MediaToastActiveChanged  += OnMediaToastActiveChanged;
         _vm.VolumeToastActiveChanged += OnVolumeToastActiveChanged;
         _vm.PowerToastActiveChanged  += OnPowerToastActiveChanged;
+
+        _vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName is nameof(_vm.IsMediaPlaying) or nameof(_vm.IsStopwatchRunning) or nameof(_vm.HasStagedFiles))
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    UpdateHandleAppearance();
+                    AnimateToCurrentState();
+                });
+            }
+        };
+    }
+
+    private void AnimateToCurrentState()
+    {
+        var (tw, th) = _monitor.GetDimensions(
+            _settings.Current.DockEdge,
+            _sm.State,
+            _vm.IsMediaToastActive,
+            _vm.IsVolumeToastActive,
+            _vm.IsPowerToastActive,
+            _vm.IsMediaPlaying,
+            _vm.IsStopwatchRunning,
+            _settings.Current.HandleWidth,
+            _settings.Current.HandleThickness,
+            _settings.Current.DynamicContentSizing);
+
+        var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th, _settings.Current.TargetMonitorIndex);
+
+        int gen = ++_animGeneration;
+        bool isExpanding = th > (ActualHeight > 0 ? ActualHeight : Height);
+        var dur = TimeSpan.FromMilliseconds(
+            _sm.State == NotchState.PeekExpanded ? 260 :
+            _sm.State == NotchState.CollapsedHover ? 200 : 180);
+        IEasingFunction ease = isExpanding ? DropletExpandEase : DropletRetractEase;
+
+        var animW = new DoubleAnimation { To = tw, Duration = dur, EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+        var animH = new DoubleAnimation { To = th, Duration = dur, EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+        var animL = new DoubleAnimation { To = tl, Duration = dur, EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+        var animT = new DoubleAnimation { To = tt, Duration = dur, EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+
+        animH.Completed += (s, e) =>
+        {
+            if (gen != _animGeneration) return;
+            BeginAnimation(WidthProperty,  null);
+            BeginAnimation(HeightProperty, null);
+            BeginAnimation(LeftProperty,   null);
+            BeginAnimation(TopProperty,    null);
+
+            Width  = tw;
+            Height = th;
+            Left   = tl;
+            Top    = tt;
+
+            FinalizeVisualLayers(_sm.State);
+        };
+
+        BeginAnimation(LeftProperty,   animL, HandoffBehavior.SnapshotAndReplace);
+        BeginAnimation(TopProperty,    animT, HandoffBehavior.SnapshotAndReplace);
+        BeginAnimation(WidthProperty,  animW, HandoffBehavior.SnapshotAndReplace);
+        BeginAnimation(HeightProperty, animH, HandoffBehavior.SnapshotAndReplace);
     }
 
     private void OnPowerToastActiveChanged(bool isPowerToastActive)
     {
-        if (_sm.State == NotchState.CollapsedHover)
-        {
-            var (tw, th) = _monitor.GetDimensions(_settings.Current.DockEdge, NotchState.CollapsedHover, _vm.IsMediaToastActive, _vm.IsVolumeToastActive, isPowerToastActive);
-            var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th);
-
-            BeginAnimation(LeftProperty,   MakeAnim(tl));
-            BeginAnimation(TopProperty,    MakeAnim(tt));
-            BeginAnimation(WidthProperty,  MakeAnim(tw));
-            BeginAnimation(HeightProperty, MakeAnim(th));
-        }
+        if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
     }
 
     private void OnVolumeToastActiveChanged(bool isVolumeToastActive)
     {
-        if (_sm.State == NotchState.CollapsedHover)
-        {
-            var (tw, th) = _monitor.GetDimensions(_settings.Current.DockEdge, NotchState.CollapsedHover, _vm.IsMediaToastActive, isVolumeToastActive);
-            var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th);
-
-            BeginAnimation(LeftProperty,   MakeAnim(tl));
-            BeginAnimation(TopProperty,    MakeAnim(tt));
-            BeginAnimation(WidthProperty,  MakeAnim(tw));
-            BeginAnimation(HeightProperty, MakeAnim(th));
-        }
+        if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
     }
 
     private void OnMediaToastActiveChanged(bool isToastActive)
     {
-        if (_sm.State == NotchState.CollapsedHover)
-        {
-            var (tw, th) = _monitor.GetDimensions(_settings.Current.DockEdge, NotchState.CollapsedHover, isToastActive, _vm.IsVolumeToastActive);
-            var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th);
-
-            BeginAnimation(LeftProperty,   MakeAnim(tl));
-            BeginAnimation(TopProperty,    MakeAnim(tt));
-            BeginAnimation(WidthProperty,  MakeAnim(tw));
-            BeginAnimation(HeightProperty, MakeAnim(th));
-        }
+        if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
     }
 
     // ── Win32 setup ──────────────────────────────────────────────────────────
@@ -252,6 +289,8 @@ public partial class NotchWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        UpdateHandleAppearance();
+        ApplyBorderAnimationPreset();
         SnapToState(NotchState.Idle);
         Opacity = OpacityFor(NotchState.Idle);
     }
@@ -261,6 +300,8 @@ public partial class NotchWindow : Window
     private void OnSettingsUpdated()
     {
         _hotkeyService.ChangePreset(_settings.Current.HotkeyPreset);
+        UpdateHandleAppearance();
+        ApplyBorderAnimationPreset();
         SnapToState(_sm.State);
     }
 
@@ -320,20 +361,86 @@ public partial class NotchWindow : Window
         // ── Click-through for Stealth ─────────────────────────────────────
         WindowStyleHelper.SetClickThrough(_hwnd, newState == NotchState.Stealth);
 
-        // ── Switch visual layers ──────────────────────────────────────────
-        IdlePill.Visibility     = newState == NotchState.Idle          ? Visibility.Visible : Visibility.Collapsed;
-        HoverCapsule.Visibility = newState == NotchState.CollapsedHover ? Visibility.Visible : Visibility.Collapsed;
-        ExpandedHub.Visibility  = newState == NotchState.PeekExpanded   ? Visibility.Visible : Visibility.Collapsed;
+        // ── Switch visual layers smoothly with droplet cross-fade ──────────
+        PrepareVisualLayersForState(newState);
 
         // ── Animate window size, position & opacity ───────────────────────
-        var (tw, th) = _monitor.GetDimensions(_settings.Current.DockEdge, newState, _vm.IsMediaToastActive, _vm.IsVolumeToastActive, _vm.IsPowerToastActive);
-        var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th);
+        AnimateToCurrentState();
 
-        BeginAnimation(LeftProperty,    MakeAnim(tl));
-        BeginAnimation(TopProperty,     MakeAnim(tt));
-        BeginAnimation(WidthProperty,   MakeAnim(tw));
-        BeginAnimation(HeightProperty,  MakeAnim(th));
-        BeginAnimation(OpacityProperty, MakeAnim(OpacityFor(newState)));
+        var targetOpacity = OpacityFor(newState);
+        var curOpacity = Opacity;
+        var opacityEase = newState == NotchState.Idle ? DropletRetractEase : (IEasingFunction)DropletExpandEase;
+        var animOp = new DoubleAnimation(curOpacity, targetOpacity, TimeSpan.FromMilliseconds(200))
+        {
+            EasingFunction = opacityEase,
+            FillBehavior   = FillBehavior.Stop
+        };
+        animOp.Completed += (_, _) =>
+        {
+            BeginAnimation(OpacityProperty, null);
+            Opacity = targetOpacity;
+        };
+        BeginAnimation(OpacityProperty, animOp, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void PrepareVisualLayersForState(NotchState state)
+    {
+        var fadeInDur  = TimeSpan.FromMilliseconds(160);
+        var fadeOutDur = TimeSpan.FromMilliseconds(120);
+
+        var fadeIn  = new DoubleAnimation(0.0, 1.0, fadeInDur)  { EasingFunction = DropletExpandEase };
+        var fadeOut = new DoubleAnimation(1.0, 0.0, fadeOutDur) { EasingFunction = DropletRetractEase };
+
+        switch (state)
+        {
+            case NotchState.Idle:
+                IdlePill.Visibility = Visibility.Visible;
+                IdlePill.BeginAnimation(OpacityProperty, fadeIn);
+                if (HoverCapsule.Visibility == Visibility.Visible)
+                    HoverCapsule.BeginAnimation(OpacityProperty, fadeOut);
+                if (ExpandedHub.Visibility == Visibility.Visible)
+                    ExpandedHub.BeginAnimation(OpacityProperty, fadeOut);
+                break;
+
+            case NotchState.CollapsedHover:
+                HoverCapsule.Visibility = Visibility.Visible;
+                HoverCapsule.BeginAnimation(OpacityProperty, fadeIn);
+                if (IdlePill.Visibility == Visibility.Visible)
+                    IdlePill.BeginAnimation(OpacityProperty, fadeOut);
+                if (ExpandedHub.Visibility == Visibility.Visible)
+                    ExpandedHub.BeginAnimation(OpacityProperty, fadeOut);
+                break;
+
+            case NotchState.PeekExpanded:
+                ExpandedHub.Visibility = Visibility.Visible;
+                ExpandedHub.BeginAnimation(OpacityProperty, fadeIn);
+                if (IdlePill.Visibility == Visibility.Visible)
+                    IdlePill.BeginAnimation(OpacityProperty, fadeOut);
+                if (HoverCapsule.Visibility == Visibility.Visible)
+                    HoverCapsule.BeginAnimation(OpacityProperty, fadeOut);
+                break;
+
+            case NotchState.Stealth:
+                IdlePill.BeginAnimation(OpacityProperty, fadeOut);
+                HoverCapsule.BeginAnimation(OpacityProperty, fadeOut);
+                ExpandedHub.BeginAnimation(OpacityProperty, fadeOut);
+                break;
+        }
+    }
+
+    private void FinalizeVisualLayers(NotchState state)
+    {
+        IdlePill.BeginAnimation(OpacityProperty, null);
+        HoverCapsule.BeginAnimation(OpacityProperty, null);
+        ExpandedHub.BeginAnimation(OpacityProperty, null);
+
+        IdlePill.Visibility     = state == NotchState.Idle          ? Visibility.Visible : Visibility.Collapsed;
+        HoverCapsule.Visibility = state == NotchState.CollapsedHover ? Visibility.Visible : Visibility.Collapsed;
+        ExpandedHub.Visibility  = state == NotchState.PeekExpanded   ? Visibility.Visible : Visibility.Collapsed;
+
+        IdlePill.Opacity     = state == NotchState.Idle          ? 1.0 : 0.0;
+        HoverCapsule.Opacity = state == NotchState.CollapsedHover ? 1.0 : 0.0;
+        ExpandedHub.Opacity  = state == NotchState.PeekExpanded   ? 1.0 : 0.0;
     }
 
     // ── Dismiss handlers ─────────────────────────────────────────────────────
@@ -383,6 +490,15 @@ public partial class NotchWindow : Window
         {
             var clickX = e.GetPosition(pb).X;
             var fraction = Math.Clamp(clickX / pb.ActualWidth, 0.0, 1.0);
+            _vm.SeekMediaFractionCommand.Execute(fraction);
+        }
+    }
+
+    private void OnMediaSliderPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Slider slider)
+        {
+            double fraction = Math.Clamp(slider.Value / 100.0, 0.0, 1.0);
             _vm.SeekMediaFractionCommand.Execute(fraction);
         }
     }
@@ -483,20 +599,172 @@ public partial class NotchWindow : Window
 
     public void SnapToState(NotchState state)
     {
-        BeginAnimation(LeftProperty,   null);
-        BeginAnimation(TopProperty,    null);
-        BeginAnimation(WidthProperty,  null);
-        BeginAnimation(HeightProperty, null);
+        _animGeneration++;
+        BeginAnimation(LeftProperty,    null);
+        BeginAnimation(TopProperty,     null);
+        BeginAnimation(WidthProperty,   null);
+        BeginAnimation(HeightProperty,  null);
         BeginAnimation(OpacityProperty, null);
 
-        var (w, h) = _monitor.GetDimensions(_settings.Current.DockEdge, state);
-        var (l, t) = _monitor.ComputePosition(_settings.Current.DockEdge, w, h);
+        var (w, h) = _monitor.GetDimensions(
+            _settings.Current.DockEdge,
+            state,
+            _vm.IsMediaToastActive,
+            _vm.IsVolumeToastActive,
+            _vm.IsPowerToastActive,
+            _vm.IsMediaPlaying,
+            _vm.IsStopwatchRunning,
+            _settings.Current.HandleWidth,
+            _settings.Current.HandleThickness,
+            _settings.Current.DynamicContentSizing);
+
+        var (l, t) = _monitor.ComputePosition(_settings.Current.DockEdge, w, h, _settings.Current.TargetMonitorIndex);
 
         Width   = w;
         Height  = h;
         Left    = l;
         Top     = t;
         Opacity = OpacityFor(state);
+
+        FinalizeVisualLayers(state);
+    }
+
+    public void UpdateHandleAppearance()
+    {
+        bool hasActivity = _vm.IsMediaPlaying || _vm.IsStopwatchRunning;
+
+        try
+        {
+            var converter = new BrushConverter();
+            if (converter.ConvertFromString(_settings.Current.HandleColor) is Brush brush)
+            {
+                IdlePill.Background = brush;
+            }
+        }
+        catch
+        {
+            IdlePill.Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x1A, 0x1C, 0x20));
+        }
+
+        if (hasActivity)
+        {
+            IdlePill.CornerRadius    = new CornerRadius(11);
+            IdlePill.BorderBrush     = new SolidColorBrush(Color.FromArgb(0x35, 0xFF, 0xFF, 0xFF));
+            IdlePill.BorderThickness = new Thickness(1);
+        }
+        else
+        {
+            double radius = Math.Max(2.0, _settings.Current.HandleThickness / 2.0);
+            IdlePill.CornerRadius    = new CornerRadius(radius);
+            IdlePill.BorderBrush     = null;
+            IdlePill.BorderThickness = new Thickness(0);
+        }
+    }
+
+    public void ApplyBorderAnimationPreset()
+    {
+        string preset = _settings.Current.BorderAnimationPreset;
+
+        HoverBorderGlow.BeginAnimation(OpacityProperty, null);
+        HubBorderGlow.BeginAnimation(OpacityProperty, null);
+
+        switch (preset)
+        {
+            case "RainbowWave":
+            {
+                var rotateHover = new RotateTransform(0);
+                var rotateHub   = new RotateTransform(0);
+
+                var rainbowHover = CreateRainbowBrush(rotateHover);
+                var rainbowHub   = CreateRainbowBrush(rotateHub);
+
+                HoverBorderGlow.BorderBrush = rainbowHover;
+                HubBorderGlow.BorderBrush   = rainbowHub;
+                HoverBorderGlow.Visibility  = Visibility.Visible;
+                HubBorderGlow.Visibility    = Visibility.Visible;
+                HoverBorderGlow.Opacity     = 1.0;
+                HubBorderGlow.Opacity       = 1.0;
+
+                var anim = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(3.5)))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                rotateHover.BeginAnimation(RotateTransform.AngleProperty, anim);
+                rotateHub.BeginAnimation(RotateTransform.AngleProperty, anim);
+                break;
+            }
+
+            case "BreathingGlow":
+            {
+                var brushHover = new SolidColorBrush(Color.FromArgb(0xC0, 0x80, 0xD8, 0xFF));
+                var brushHub   = new SolidColorBrush(Color.FromArgb(0xC0, 0x80, 0xD8, 0xFF));
+
+                HoverBorderGlow.BorderBrush = brushHover;
+                HubBorderGlow.BorderBrush   = brushHub;
+                HoverBorderGlow.Visibility  = Visibility.Visible;
+                HubBorderGlow.Visibility    = Visibility.Visible;
+
+                var anim = new DoubleAnimation(0.25, 0.95, new Duration(TimeSpan.FromSeconds(1.8)))
+                {
+                    AutoReverse    = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                HoverBorderGlow.BeginAnimation(OpacityProperty, anim);
+                HubBorderGlow.BeginAnimation(OpacityProperty, anim);
+                break;
+            }
+
+            case "NeonGlow":
+            {
+                var neonHover = new LinearGradientBrush(
+                    Color.FromArgb(0xFF, 0x00, 0xE5, 0xFF),
+                    Color.FromArgb(0xFF, 0xFF, 0x00, 0x7F),
+                    new Point(0, 0), new Point(1, 1));
+                var neonHub = new LinearGradientBrush(
+                    Color.FromArgb(0xFF, 0x00, 0xE5, 0xFF),
+                    Color.FromArgb(0xFF, 0xFF, 0x00, 0x7F),
+                    new Point(0, 0), new Point(1, 1));
+
+                HoverBorderGlow.BorderBrush = neonHover;
+                HubBorderGlow.BorderBrush   = neonHub;
+                HoverBorderGlow.Visibility  = Visibility.Visible;
+                HubBorderGlow.Visibility    = Visibility.Visible;
+
+                var anim = new DoubleAnimation(0.4, 1.0, new Duration(TimeSpan.FromSeconds(1.2)))
+                {
+                    AutoReverse    = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                HoverBorderGlow.BeginAnimation(OpacityProperty, anim);
+                HubBorderGlow.BeginAnimation(OpacityProperty, anim);
+                break;
+            }
+
+            default:
+                HoverBorderGlow.Visibility = Visibility.Collapsed;
+                HubBorderGlow.Visibility   = Visibility.Collapsed;
+                break;
+        }
+    }
+
+    private static LinearGradientBrush CreateRainbowBrush(RotateTransform rotate)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint        = new Point(0, 0),
+            EndPoint          = new Point(1, 1),
+            RelativeTransform = rotate
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x3D, 0x00), 0.00));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x91, 0x00), 0.16));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0xEA, 0x00), 0.33));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x00, 0xE6, 0x76), 0.50));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x00, 0xE5, 0xFF), 0.66));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x29, 0x79, 0xFF), 0.83));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xD5, 0x00, 0xF9), 1.00));
+        return brush;
     }
 
     private double OpacityFor(NotchState s) => s switch
@@ -505,9 +773,6 @@ public partial class NotchWindow : Window
         NotchState.Idle    => _settings.Current.IdleOpacity,
         _                  => 1.0
     };
-
-    private static DoubleAnimation MakeAnim(double to) =>
-        new(to, AnimDur) { EasingFunction = Ease };
 
     private void OnClosed(object? sender, EventArgs e)
     {
