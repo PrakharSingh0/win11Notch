@@ -92,10 +92,13 @@ public partial class NotchWindow : Window
         _vm.PropertyChanged += (s, e) =>
         {
             if (e.PropertyName is nameof(_vm.IsMediaPlaying) or nameof(_vm.IsStopwatchRunning)
-                or nameof(_vm.HasStagedFiles) or nameof(_vm.HasBluetoothBattery))
+                or nameof(_vm.HasStagedFiles) or nameof(_vm.HasBluetoothBattery)
+                or nameof(_vm.IsOnDesktop) or nameof(_vm.ShowFullLiveActivity)
+                or nameof(_vm.ShowDesktopAmbientPill))
             {
                 Dispatcher.InvokeAsync(() =>
                 {
+                    if (_sm.State == NotchState.Stealth) return;
                     UpdateHandleAppearance();
                     AnimateToCurrentState();
                 });
@@ -105,6 +108,12 @@ public partial class NotchWindow : Window
 
     private void AnimateToCurrentState()
     {
+        if (_sm.State == NotchState.Stealth)
+        {
+            FinalizeVisualLayers(NotchState.Stealth);
+            Opacity = 0.0;
+            return;
+        }
         App.Log($"[NotchWindow] AnimateToCurrentState enter (State={_sm.State})");
         var (tw, th) = _monitor.GetDimensions(
             _settings.Current.DockEdge,
@@ -120,7 +129,9 @@ public partial class NotchWindow : Window
             _settings.Current.DualActivityEnabled,
             _vm.HasBluetoothBattery,
             _vm.IsBrightnessToastActive,
-            _vm.HasUpcomingReminder);
+            _vm.HasUpcomingReminder,
+            _vm.ShowFullLiveActivity,
+            _vm.ShowDesktopAmbientPill);
 
         var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th, _settings.Current.TargetMonitorIndex);
 
@@ -140,6 +151,19 @@ public partial class NotchWindow : Window
         var animH = new DoubleAnimation(curH, th, dur) { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
         var animL = new DoubleAnimation(curL, tl, dur) { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
         var animT = new DoubleAnimation(curT, tt, dur) { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+
+        double targetOp = OpacityFor(_sm.State);
+        if (Math.Abs(Opacity - targetOp) > 0.02)
+        {
+            var animOp = new DoubleAnimation(Opacity, targetOp, dur) { EasingFunction = ease, FillBehavior = FillBehavior.Stop };
+            animOp.Completed += (_, _) =>
+            {
+                if (gen != _animGeneration) return;
+                BeginAnimation(OpacityProperty, null);
+                Opacity = OpacityFor(_sm.State);
+            };
+            BeginAnimation(OpacityProperty, animOp, HandoffBehavior.SnapshotAndReplace);
+        }
 
         animH.Completed += (_, _) =>
         {
@@ -203,9 +227,11 @@ public partial class NotchWindow : Window
         _hotkeyService.Register(_hwnd, _settings.Current.HotkeyPreset);
         _hotkeyService.HotkeyPressed += () => _sm.Toggle();
 
-        // Event-driven fullscreen detection & topmost Z-order re-assertion (ZERO idle polling timers)
+        // Event-driven fullscreen & desktop context detection + topmost Z-order re-assertion (ZERO idle polling timers)
         _fullscreenDetector.ForegroundWindowChanged += OnForegroundWindowChanged;
+        _fullscreenDetector.DesktopContextChanged += OnDesktopContextChanged;
         _fullscreenDetector.Start(_hwnd);
+        SyncDesktopContext(_fullscreenDetector.IsOnDesktop);
 
         // Event-driven clipboard listener (zero idle polling)
         _clipboardService.Start(_hwnd);
@@ -222,6 +248,31 @@ public partial class NotchWindow : Window
             {
                 WindowStyleHelper.EnsureTopmost(_hwnd);
             }
+        });
+    }
+
+    private void OnDesktopContextChanged(bool isOnDesktop)
+    {
+        Dispatcher.InvokeAsync(() => SyncDesktopContext(isOnDesktop));
+    }
+
+    private void SyncDesktopContext(bool isOnDesktop)
+    {
+        _vm.IsOnDesktop = isOnDesktop;
+        bool hideOverApps = _settings.Current.HandleVisibilityMode == "DesktopOnly" && !isOnDesktop;
+        _sm.SetContextHidden(hideOverApps);
+        UpdateHandleAppearance();
+        AnimateToCurrentState();
+    }
+
+    public void ApplyContextModeFromTray()
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            _fullscreenDetector.EvaluateCurrentContext();
+            SyncDesktopContext(_fullscreenDetector.IsOnDesktop);
+            _sm.SyncRestingState();
+            _vm.NotifyIdlePresentationChanged();
         });
     }
 
@@ -347,8 +398,9 @@ public partial class NotchWindow : Window
     {
         UpdateHandleAppearance();
         ApplyBorderAnimationPreset();
-        SnapToState(NotchState.Idle);
-        Opacity = OpacityFor(NotchState.Idle);
+        _sm.SyncRestingState();
+        SnapToState(_sm.State);
+        Opacity = OpacityFor(_sm.State);
 
         if (_settings.Current.ShowStartupGreeting)
         {
@@ -376,7 +428,7 @@ public partial class NotchWindow : Window
     {
         if (!ignoreActiveCheck)
         {
-            if (_sm.State != NotchState.Idle) return;
+            if (_sm.State is not (NotchState.Idle or NotchState.CollapsedHover)) return;
             if (_vm.IsMediaToastActive || _vm.IsVolumeToastActive || _vm.IsBrightnessToastActive || _vm.IsPowerToastActive) return;
         }
         else if (_sm.State == NotchState.PeekExpanded)
@@ -400,6 +452,10 @@ public partial class NotchWindow : Window
     {
         _hotkeyService.ChangePreset(_settings.Current.HotkeyPreset);
         _vm.Timer.ApplySettings(_settings.Current);
+        _fullscreenDetector.EvaluateCurrentContext();
+        _vm.IsOnDesktop = _fullscreenDetector.IsOnDesktop;
+        _sm.SetContextHidden(_settings.Current.HandleVisibilityMode == "DesktopOnly" && !_fullscreenDetector.IsOnDesktop);
+        _sm.SyncRestingState();
         _vm.RefreshSettingsBindings();
         UpdateHandleAppearance();
         ApplyBorderAnimationPreset();
@@ -674,13 +730,42 @@ public partial class NotchWindow : Window
 
     // ── Mouse event bridge ───────────────────────────────────────────────────
 
+    private string[]? _pendingDropFiles;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct WIN32_POINT { public int X, Y; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out WIN32_POINT lpPoint);
+
+    private bool IsCursorInsideWindowBounds()
+    {
+        try
+        {
+            if (!GetCursorPos(out var pt)) return false;
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+            double dpiY = source?.CompositionTarget?.TransformToDevice.M22 ?? 1.0;
+
+            double pxLeft   = Left * dpiX - 6;
+            double pxTop    = Top * dpiY - 6;
+            double pxRight  = (Left + ActualWidth) * dpiX + 6;
+            double pxBottom = (Top + ActualHeight) * dpiY + 6;
+            return pt.X >= pxLeft && pt.X <= pxRight && pt.Y >= pxTop && pt.Y <= pxBottom;
+        }
+        catch { return false; }
+    }
+
     protected override void OnMouseEnter(MouseEventArgs e)
     {
         base.OnMouseEnter(e);
         App.Log($"[NotchWindow] OnMouseEnter (State={_sm.State})");
-        _vm.IsFileDragOverlayVisible = false;
-        _vm.IsDropDockHovered = false;
-        _vm.IsDropShareHovered = false;
+        if (!_vm.HasPendingDropChoice)
+        {
+            _vm.IsFileDragOverlayVisible = false;
+            _vm.IsDropDockHovered = false;
+            _vm.IsDropShareHovered = false;
+        }
         _sm.OnMouseEnter();
     }
 
@@ -722,7 +807,7 @@ public partial class NotchWindow : Window
         }
     }
 
-    // ── Drag and drop file staging ───────────────────────────────────────────
+    // ── Drag and drop file staging / Quick Share choice ─────────────────────
 
     protected override void OnDragEnter(DragEventArgs e)
     {
@@ -732,6 +817,9 @@ public partial class NotchWindow : Window
         // If already on the Share tab (Tab 6), allow direct drop onto the queue without overlay
         if (_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != 6)
         {
+            _pendingDropFiles = null;
+            _vm.HasPendingDropChoice = false;
+            _vm.PendingDropSummary = "Drop left to Stage in Dock • Drop right to Quick Share";
             _vm.IsFileDragOverlayVisible = true;
             _vm.IsDropDockHovered = false;
             _vm.IsDropShareHovered = false;
@@ -751,6 +839,11 @@ public partial class NotchWindow : Window
         base.OnDragOver(e);
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
+            if ((_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != 6) && !_vm.IsFileDragOverlayVisible)
+            {
+                _vm.HasPendingDropChoice = false;
+                _vm.IsFileDragOverlayVisible = true;
+            }
             e.Effects = DragDropEffects.Copy;
             e.Handled = true;
         }
@@ -759,39 +852,65 @@ public partial class NotchWindow : Window
     protected override void OnDragLeave(DragEventArgs e)
     {
         base.OnDragLeave(e);
-        var pos = e.GetPosition(this);
-        if (pos.X <= 2 || pos.Y <= 2 || pos.X >= ActualWidth - 2 || pos.Y >= ActualHeight - 2)
+        if (_vm.HasPendingDropChoice) return;
+
+        // Defer slightly so edge movement or Idle->Expanded transition does not kill the overlay
+        Dispatcher.InvokeAsync(async () =>
         {
-            _vm.IsFileDragOverlayVisible = false;
-            _vm.IsDropDockHovered = false;
-            _vm.IsDropShareHovered = false;
-        }
+            await Task.Delay(70);
+            if (_vm.HasPendingDropChoice) return;
+            if (!IsCursorInsideWindowBounds())
+            {
+                _vm.IsFileDragOverlayVisible = false;
+                _vm.IsDropDockHovered = false;
+                _vm.IsDropShareHovered = false;
+            }
+        });
     }
 
     protected override void OnDrop(DragEventArgs e)
     {
         base.OnDrop(e);
-        _vm.IsFileDragOverlayVisible = false;
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length == 0) return;
+
+        if (_sm.State == NotchState.PeekExpanded && _vm.SelectedTabIndex == 6)
+        {
+            ClearDropOverlayState();
+            _quickShareService.AddPaths(files);
+            _vm.RefreshQuickShareState();
+            e.Handled = true;
+            return;
+        }
+
+        // Dropped on the notch edge/frame before selecting left/right half: keep overlay open and ask!
+        _pendingDropFiles = files;
+        string firstName = System.IO.Path.GetFileName(files[0]);
+        if (string.IsNullOrEmpty(firstName)) firstName = files[0];
+        _vm.PendingDropSummary = files.Length == 1
+            ? $"\"{firstName}\" — choose action:"
+            : $"{files.Length} items ({firstName}...) — choose action:";
+        _vm.HasPendingDropChoice = true;
+        _vm.IsFileDragOverlayVisible = true;
         _vm.IsDropDockHovered = false;
         _vm.IsDropShareHovered = false;
 
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        if (_sm.State != NotchState.PeekExpanded)
         {
-            if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
-            {
-                if (_sm.State == NotchState.PeekExpanded && _vm.SelectedTabIndex == 6)
-                {
-                    _quickShareService.AddPaths(files);
-                    _vm.RefreshQuickShareState();
-                }
-                else
-                {
-                    _shelfService.AddFiles(files);
-                    _vm.SelectedTabIndex = 2; // Default fallback to Shelf Dock
-                }
-            }
-            e.Handled = true;
+            _sm.OnDragEnter();
         }
+        WindowStyleHelper.SetNoActivate(_hwnd, false);
+        Activate();
+        e.Handled = true;
+    }
+
+    private void ClearDropOverlayState()
+    {
+        _pendingDropFiles = null;
+        _vm.HasPendingDropChoice = false;
+        _vm.IsFileDragOverlayVisible = false;
+        _vm.IsDropDockHovered = false;
+        _vm.IsDropShareHovered = false;
     }
 
     private void OnDockDropTargetDragOver(object sender, DragEventArgs e)
@@ -809,12 +928,9 @@ public partial class NotchWindow : Window
 
     private void OnDockDropTargetDrop(object sender, DragEventArgs e)
     {
-        _vm.IsFileDragOverlayVisible = false;
-        _vm.IsDropDockHovered = false;
-        _vm.IsDropShareHovered = false;
-
         if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
         {
+            ClearDropOverlayState();
             _shelfService.AddFiles(files);
             _vm.SelectedTabIndex = 2;
             e.Handled = true;
@@ -836,15 +952,37 @@ public partial class NotchWindow : Window
 
     private async void OnShareDropTargetDrop(object sender, DragEventArgs e)
     {
-        _vm.IsFileDragOverlayVisible = false;
-        _vm.IsDropDockHovered = false;
-        _vm.IsDropShareHovered = false;
-
         if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
         {
+            ClearDropOverlayState();
             e.Handled = true;
             await _vm.SendDroppedFilesViaQuickShareAsync(files);
         }
+    }
+
+    private void OnDockChoiceClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!_vm.HasPendingDropChoice || _pendingDropFiles == null) return;
+        var files = _pendingDropFiles;
+        ClearDropOverlayState();
+        _shelfService.AddFiles(files);
+        _vm.SelectedTabIndex = 2;
+        e.Handled = true;
+    }
+
+    private async void OnShareChoiceClick(object sender, MouseButtonEventArgs e)
+    {
+        if (!_vm.HasPendingDropChoice || _pendingDropFiles == null) return;
+        var files = _pendingDropFiles;
+        ClearDropOverlayState();
+        e.Handled = true;
+        await _vm.SendDroppedFilesViaQuickShareAsync(files);
+    }
+
+    private void OnCancelDropChoiceClick(object sender, RoutedEventArgs e)
+    {
+        ClearDropOverlayState();
+        _sm.Collapse();
     }
 
     // ── Drag staged file OUT of the Dock (removes staged entry on drop) ───────
@@ -902,7 +1040,9 @@ public partial class NotchWindow : Window
             _settings.Current.DualActivityEnabled,
             _vm.HasBluetoothBattery,
             _vm.IsBrightnessToastActive,
-            _vm.HasUpcomingReminder);
+            _vm.HasUpcomingReminder,
+            _vm.ShowFullLiveActivity,
+            _vm.ShowDesktopAmbientPill);
 
         var (l, t) = _monitor.ComputePosition(_settings.Current.DockEdge, w, h, _settings.Current.TargetMonitorIndex);
 
@@ -922,7 +1062,7 @@ public partial class NotchWindow : Window
 
     public void UpdateHandleAppearance()
     {
-        bool hasActivity = _vm.IsMediaPlaying || _vm.IsStopwatchRunning;
+        bool hasExpandedIdle = _vm.ShowFullLiveActivity || _vm.ShowDesktopAmbientPill;
 
         // Live IPS dark-slate acrylic tint (#1A1C20) for HoverCapsule and ExpandedHub
         byte hoverAlpha = (byte)Math.Round(Math.Clamp(_settings.Current.AcrylicTintOpacity + 0.18, 0.65, 0.96) * 255);
@@ -943,10 +1083,12 @@ public partial class NotchWindow : Window
             IdlePill.Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x1A, 0x1C, 0x20));
         }
 
-        if (hasActivity)
+        if (hasExpandedIdle)
         {
             IdlePill.CornerRadius    = new CornerRadius(12);
-            IdlePill.BorderBrush     = new SolidColorBrush(Color.FromArgb(0x36, 0xFF, 0xFF, 0xFF));
+            IdlePill.BorderBrush     = (_vm.ShowFullLiveActivity && _vm.IsMediaPlaying)
+                ? _vm.MediaAccentGlowBrush
+                : new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
             IdlePill.BorderThickness = new Thickness(1);
         }
         else
@@ -964,13 +1106,71 @@ public partial class NotchWindow : Window
 
         HoverBorderGlow.BeginAnimation(OpacityProperty, null);
         HubBorderGlow.BeginAnimation(OpacityProperty, null);
+        HoverBorderGlow.BorderBrush = null;
+        HubBorderGlow.BorderBrush   = null;
+        HoverBorderGlow.Opacity     = 1.0;
+        HubBorderGlow.Opacity       = 1.0;
+        HoverBorderGlow.BorderThickness = new Thickness(1.5);
+        HubBorderGlow.BorderThickness   = new Thickness(1.5);
 
         switch (preset)
         {
+            case "MeteorSweep":
+            {
+                var txHover = new TranslateTransform(-0.52, 0);
+                var txHub   = new TranslateTransform(-0.52, 0);
+
+                HoverBorderGlow.BorderBrush     = CreateMeteorSweepBrush(txHover);
+                HubBorderGlow.BorderBrush       = CreateMeteorSweepBrush(txHub);
+                HoverBorderGlow.BorderThickness = new Thickness(2.0);
+                HubBorderGlow.BorderThickness   = new Thickness(2.0);
+                HoverBorderGlow.Visibility      = Visibility.Visible;
+                HubBorderGlow.Visibility        = Visibility.Visible;
+
+                var anim = new DoubleAnimation(-0.52, 0.52, new Duration(TimeSpan.FromSeconds(1.35)))
+                {
+                    AutoReverse    = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                txHover.BeginAnimation(TranslateTransform.XProperty, anim);
+                txHub.BeginAnimation(TranslateTransform.XProperty, anim);
+                break;
+            }
+
+            case "MacAppleGlow":
+            {
+                var rotateHover = new RotateTransform(0, 0.5, 0.5);
+                var rotateHub   = new RotateTransform(0, 0.5, 0.5);
+
+                HoverBorderGlow.BorderBrush     = CreateMacAppleBrush(rotateHover);
+                HubBorderGlow.BorderBrush       = CreateMacAppleBrush(rotateHub);
+                HoverBorderGlow.BorderThickness = new Thickness(2.0);
+                HubBorderGlow.BorderThickness   = new Thickness(2.0);
+                HoverBorderGlow.Visibility      = Visibility.Visible;
+                HubBorderGlow.Visibility        = Visibility.Visible;
+
+                var spin = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(2.6)))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                var pulse = new DoubleAnimation(0.72, 1.0, new Duration(TimeSpan.FromSeconds(1.6)))
+                {
+                    AutoReverse    = true,
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+                };
+                rotateHover.BeginAnimation(RotateTransform.AngleProperty, spin);
+                rotateHub.BeginAnimation(RotateTransform.AngleProperty, spin);
+                HoverBorderGlow.BeginAnimation(OpacityProperty, pulse);
+                HubBorderGlow.BeginAnimation(OpacityProperty, pulse);
+                break;
+            }
+
             case "RainbowWave":
             {
-                var rotateHover = new RotateTransform(0);
-                var rotateHub   = new RotateTransform(0);
+                var rotateHover = new RotateTransform(0, 0.5, 0.5);
+                var rotateHub   = new RotateTransform(0, 0.5, 0.5);
 
                 var rainbowHover = CreateRainbowBrush(rotateHover);
                 var rainbowHub   = CreateRainbowBrush(rotateHub);
@@ -979,8 +1179,6 @@ public partial class NotchWindow : Window
                 HubBorderGlow.BorderBrush   = rainbowHub;
                 HoverBorderGlow.Visibility  = Visibility.Visible;
                 HubBorderGlow.Visibility    = Visibility.Visible;
-                HoverBorderGlow.Opacity     = 1.0;
-                HubBorderGlow.Opacity       = 1.0;
 
                 var anim = new DoubleAnimation(0, 360, new Duration(TimeSpan.FromSeconds(3.5)))
                 {
@@ -1046,6 +1244,42 @@ public partial class NotchWindow : Window
         }
     }
 
+    private static LinearGradientBrush CreateMeteorSweepBrush(TranslateTransform translate)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint        = new Point(0, 0),
+            EndPoint          = new Point(1, 0.12),
+            RelativeTransform = translate
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 0.00));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), 0.30));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF), 0.44));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF), 0.50));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF), 0.56));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), 0.70));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), 1.00));
+        return brush;
+    }
+
+    private static LinearGradientBrush CreateMacAppleBrush(RotateTransform rotate)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint        = new Point(0, 0),
+            EndPoint          = new Point(1, 1),
+            RelativeTransform = rotate
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x6D, 0x3F), 0.00));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x37, 0x5F), 0.17));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xBF, 0x5A, 0xF2), 0.34));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x0A, 0x84, 0xFF), 0.51));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x5A, 0xC8, 0xFA), 0.68));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0x30, 0xD1, 0x58), 0.85));
+        brush.GradientStops.Add(new GradientStop(Color.FromRgb(0xFF, 0x6D, 0x3F), 1.00));
+        return brush;
+    }
+
     private static LinearGradientBrush CreateRainbowBrush(RotateTransform rotate)
     {
         var brush = new LinearGradientBrush
@@ -1067,13 +1301,16 @@ public partial class NotchWindow : Window
     private double OpacityFor(NotchState s) => s switch
     {
         NotchState.Stealth => 0.0,
-        NotchState.Idle    => _settings.Current.IdleOpacity,
+        NotchState.Idle    => (_vm.ShowFullLiveActivity || _vm.ShowDesktopAmbientPill)
+            ? Math.Max(_settings.Current.IdleOpacity, 0.90)
+            : _settings.Current.IdleOpacity,
         _                  => 1.0
     };
 
     private void OnClosed(object? sender, EventArgs e)
     {
         _fullscreenDetector.ForegroundWindowChanged -= OnForegroundWindowChanged;
+        _fullscreenDetector.DesktopContextChanged -= OnDesktopContextChanged;
         _hotkeyService.Dispose();
         _fullscreenDetector.Dispose();
         _clipboardService.Dispose();

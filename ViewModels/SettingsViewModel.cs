@@ -38,6 +38,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _handleColor                  = "#E61A1C20";
     [ObservableProperty] private string _borderAnimationPreset        = "None";
     [ObservableProperty] private bool   _dynamicContentSizing         = true;
+    [ObservableProperty] private string _handleVisibilityMode         = "SmartDesktop";
+    [ObservableProperty] private bool   _showDesktopAmbientGlance     = true;
+    [ObservableProperty] private bool   _alwaysShowHoverCapsule       = false;
     [ObservableProperty] private string _currentMemoryText            = "35.0 MB";
     [ObservableProperty] private string _sidebarGreetingText          = "Control Center";
 
@@ -98,6 +101,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             HandleColor                  = s.HandleColor;
             BorderAnimationPreset        = s.BorderAnimationPreset;
             DynamicContentSizing         = s.DynamicContentSizing;
+            HandleVisibilityMode         = string.IsNullOrWhiteSpace(s.HandleVisibilityMode) ? "SmartDesktop" : s.HandleVisibilityMode;
+            ShowDesktopAmbientGlance     = s.ShowDesktopAmbientGlance;
+            AlwaysShowHoverCapsule       = s.AlwaysShowHoverCapsule;
             DefaultFocusMinutes          = s.DefaultFocusMinutes;
             DefaultBreakMinutes          = s.DefaultBreakMinutes;
             DailyWaterTargetCups         = s.DailyWaterTargetCups;
@@ -142,6 +148,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnHandleColorChanged(string value)                  => ApplyAndSave();
     partial void OnBorderAnimationPresetChanged(string value)        => ApplyAndSave();
     partial void OnDynamicContentSizingChanged(bool value)           => ApplyAndSave();
+    partial void OnHandleVisibilityModeChanged(string value)         => ApplyAndSave();
+    partial void OnShowDesktopAmbientGlanceChanged(bool value)       => ApplyAndSave();
+    partial void OnAlwaysShowHoverCapsuleChanged(bool value)         => ApplyAndSave();
     partial void OnDefaultFocusMinutesChanged(int value)             => ApplyAndSave();
     partial void OnDefaultBreakMinutesChanged(int value)             => ApplyAndSave();
     partial void OnDailyWaterTargetCupsChanged(int value)            => ApplyAndSave();
@@ -178,6 +187,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.HandleColor                  = HandleColor;
         s.BorderAnimationPreset        = BorderAnimationPreset;
         s.DynamicContentSizing         = DynamicContentSizing;
+        s.HandleVisibilityMode         = HandleVisibilityMode;
+        s.ShowDesktopAmbientGlance     = ShowDesktopAmbientGlance;
+        s.AlwaysShowHoverCapsule       = AlwaysShowHoverCapsule;
         s.DefaultFocusMinutes          = DefaultFocusMinutes;
         s.DefaultBreakMinutes          = DefaultBreakMinutes;
         s.DailyWaterTargetCups         = DailyWaterTargetCups;
@@ -206,6 +218,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         HandleColor                  = "#E61A1C20";
         BorderAnimationPreset        = "None";
         DynamicContentSizing         = true;
+        HandleVisibilityMode         = "SmartDesktop";
+        ShowDesktopAmbientGlance     = true;
+        AlwaysShowHoverCapsule       = false;
         DefaultFocusMinutes          = 25;
         DefaultBreakMinutes          = 5;
         DailyWaterTargetCups         = 8;

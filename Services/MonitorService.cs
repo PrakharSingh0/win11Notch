@@ -146,13 +146,19 @@ public sealed class MonitorService
         bool dualActivityEnabled = true,
         bool hasBluetoothBattery = false,
         bool isBrightnessToast = false,
-        bool hasUpcomingReminder = false)
+        bool hasUpcomingReminder = false,
+        bool showFullLivePreview = true,
+        bool showDesktopAmbient = false)
     {
         bool isVerticalEdge = dockEdge is "Left" or "Right";
         int hw = Math.Clamp(handleWidth, 40, 200);
         int ht = Math.Clamp(handleThickness, 4, 16);
 
         bool isDualActivity = dualActivityEnabled && isMediaPlaying && isStopwatchRunning;
+        bool idleShowsMedia = showFullLivePreview && isMediaPlaying;
+        bool idleShowsTimer = showFullLivePreview && isStopwatchRunning;
+        bool idleDual       = dualActivityEnabled && idleShowsMedia && idleShowsTimer;
+        bool idleHasLive    = idleShowsMedia || idleShowsTimer;
 
         double hoverWidth;
         if (!dynamicSizing)
@@ -197,11 +203,11 @@ public sealed class MonitorService
             hoverWidth += 92;
         }
 
-        int idleWidth = isDualActivity ? 230 : 164;
+        int idleWidth = idleDual ? 230 : (idleHasLive ? 168 : 148);
 
         return state switch
         {
-            NotchState.Idle => (isMediaPlaying || isStopwatchRunning)
+            NotchState.Idle => (idleHasLive || showDesktopAmbient)
                 ? (isVerticalEdge ? (24, idleWidth) : (idleWidth, 24))
                 : (isVerticalEdge ? (ht, hw) : (hw, ht)),
             NotchState.CollapsedHover => (hoverWidth, 44),

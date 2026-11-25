@@ -68,4 +68,18 @@ public sealed class AppSettings
 
     /// <summary>Whether to show dual-activity split presentation when music and timers run concurrently.</summary>
     public bool DualActivityEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Idle handle context behavior:
+    /// "SmartDesktop" (Live preview on Desktop, minimal pill over apps),
+    /// "DesktopOnly" (Live preview on Desktop only, hidden over apps),
+    /// "AlwaysLive" (Always show live preview everywhere).
+    /// </summary>
+    public string HandleVisibilityMode { get; set; } = "SmartDesktop";
+
+    /// <summary>Whether to show an ambient clock &amp; status glance pill when resting on the Desktop.</summary>
+    public bool ShowDesktopAmbientGlance { get; set; } = true;
+
+    /// <summary>Whether to keep the compact HoverCapsule visible at all times instead of shrinking to IdlePill.</summary>
+    public bool AlwaysShowHoverCapsule { get; set; } = false;
 }

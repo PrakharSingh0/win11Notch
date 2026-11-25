@@ -2,10 +2,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Win11Notch.Core.Settings;
 using Win11Notch.Core.State;
 using Win11Notch.ViewModels;
@@ -15,13 +15,63 @@ using Wpf.Ui.Tray.Controls;
 namespace Win11Notch.Services;
 
 /// <summary>
-/// Manages the system tray icon and right-click context menu using WPF-UI.Tray.
+/// Manages the Windows system tray icon (WPF-UI.Tray) and a lightweight native Win32
+/// dark context menu (TrackPopupMenuEx) anchored cleanly to the cursor at the taskbar/tray.
 /// </summary>
 public sealed class TrayService : IDisposable
 {
+    private const int  VK_RBUTTON      = 0x02;
+    private const uint WM_NULL         = 0x0000;
+    private const int  WS_POPUP        = unchecked((int)0x80000000);
+    private const int  WS_EX_TOOLWINDOW = 0x00000080;
+
+    private const uint MF_STRING       = 0x00000000;
+    private const uint MF_CHECKED      = 0x00000008;
+    private const uint MF_POPUP        = 0x00000010;
+    private const uint MF_SEPARATOR    = 0x00000800;
+
+    private const uint TPM_LEFTALIGN   = 0x0000;
+    private const uint TPM_RIGHTBUTTON = 0x0002;
+    private const uint TPM_RETURNCMD   = 0x0100;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr CreatePopupMenu();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyMenu(IntPtr hMenu);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AppendMenu(IntPtr hMenu, uint uFlags, UIntPtr uIDNewItem, string? lpNewItem);
+
+    [DllImport("user32.dll")]
+    private static extern uint TrackPopupMenuEx(IntPtr hMenu, uint fuFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    // Windows 11 dark-mode support for native Win32 popup menus (uxtheme undocumented ordinals)
+    [DllImport("uxtheme.dll", EntryPoint = "#135")]
+    private static extern int SetPreferredAppMode(int preferredAppMode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#136")]
+    private static extern void FlushMenuThemes();
 
     private readonly TrayViewModel     _vm;
     private readonly NotchWindow       _window;
@@ -29,12 +79,10 @@ public sealed class TrayService : IDisposable
     private readonly SettingsService   _settings;
     private readonly MonitorService    _monitor;
 
-    private NotifyIcon? _notifyIcon;
-    private MenuItem?   _dockTopItem;
-    private MenuItem?   _dockLeftItem;
-    private MenuItem?   _dockRightItem;
-    private MenuItem?   _stealthItem;
-    private readonly List<(int Index, MenuItem Item)> _monitorMenuItems = new();
+    private NotifyIcon?      _notifyIcon;
+    private HwndSource?      _menuOwnerHwnd;
+    private DispatcherTimer? _rightClickReleaseTimer;
+    private bool             _isMenuOpen;
 
     public TrayService(
         TrayViewModel     vm,
@@ -52,145 +100,165 @@ public sealed class TrayService : IDisposable
 
     public void Initialize()
     {
-        var menu = BuildMenu();
+        try
+        {
+            SetPreferredAppMode(2); // ForceDark for native Win32 tray menus
+            FlushMenuThemes();
+        }
+        catch { /* fallback to system default menu theme */ }
+
+        _menuOwnerHwnd = new HwndSource(new HwndSourceParameters("Win11NotchTrayMenuOwner")
+        {
+            Width               = 0,
+            Height              = 0,
+            WindowStyle         = WS_POPUP,
+            ExtendedWindowStyle = WS_EX_TOOLWINDOW
+        });
 
         _notifyIcon = new NotifyIcon
         {
-            TooltipText      = $"Win11Notch • {GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle}",
+            TooltipText      = "Win11Notch",
             FocusOnLeftClick = false,
-            MenuOnRightClick = true,
-            Menu             = menu,
+            MenuOnRightClick = false,
             Icon             = CreateDefaultIcon()
         };
 
 #pragma warning disable CS8622
-        _notifyIcon.LeftClick += (_, _) => _stateMachine.Toggle();
+        _notifyIcon.LeftClick  += (_, _) => _stateMachine.Toggle();
+        _notifyIcon.RightClick += (_, _) => ScheduleNativeTrayMenu();
 #pragma warning restore CS8622
 
-        _vm.DockEdgeChanged += (_, edge) =>
-        {
-            UpdateDockChecks(edge);
-            RepositionWindow();
-        };
-
-        _vm.ConfigReloaded += (_, _) =>
-        {
-            UpdateDockChecks(_settings.Current.DockEdge);
-            UpdateMonitorChecks(_settings.Current.TargetMonitorIndex);
-            RepositionWindow();
-        };
-
-        _stateMachine.ManualStealthChanged += (_, hidden) =>
-        {
-            if (_stealthItem != null) _stealthItem.IsChecked = hidden;
-        };
+        _vm.DockEdgeChanged += (_, _) => RepositionWindow();
+        _vm.ConfigReloaded  += (_, _) => RepositionWindow();
 
         _notifyIcon.Register();
     }
 
-    private ContextMenu BuildMenu()
+    private void ScheduleNativeTrayMenu()
     {
-        var menu = new ContextMenu
+        if (_isMenuOpen) return;
+        _rightClickReleaseTimer?.Stop();
+
+        if ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) == 0)
         {
-            MinWidth = 220
-        };
-
-        // Ensure clicking outside dismisses the WPF tray ContextMenu cleanly on Windows 11
-        menu.Opened += (_, _) =>
-        {
-            if (_notifyIcon != null)
-            {
-                _notifyIcon.TooltipText = $"Win11Notch • {GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle}";
-            }
-            if (PresentationSource.FromVisual(menu) is HwndSource src && src.Handle != IntPtr.Zero)
-            {
-                SetForegroundWindow(src.Handle);
-            }
-        };
-
-        menu.Items.Add(MakeItem("Open / Toggle Hub (Alt+Space)", "\uE71D", () => _vm.TogglePeekCommand.Execute(null)));
-
-        _stealthItem = MakeItem("Hide Notch Handle (Stealth)", "\uED1A", () =>
-        {
-            _stateMachine.SetManualStealth(!_stateMachine.IsManualStealth);
-        }, checkable: true);
-        _stealthItem.IsChecked = _stateMachine.IsManualStealth;
-        menu.Items.Add(_stealthItem);
-
-        menu.Items.Add(MakeItem("Show Greeting Banner", "\uE706", () => _window.TriggerGreetingBanner(durationMs: 3600, ignoreActiveCheck: true)));
-
-        menu.Items.Add(new Separator());
-
-        var dockMenu = MakeParentItem("Dock Edge", "\uE7F4");
-        _dockTopItem = MakeItem("Top Edge", "\uE74A", () => DockAndReposition("Top"), checkable: true);
-        _dockLeftItem = MakeItem("Left Edge", "\uE76B", () => DockAndReposition("Left"), checkable: true);
-        _dockRightItem = MakeItem("Right Edge", "\uE76C", () => DockAndReposition("Right"), checkable: true);
-        dockMenu.Items.Add(_dockTopItem);
-        dockMenu.Items.Add(_dockLeftItem);
-        dockMenu.Items.Add(_dockRightItem);
-        UpdateDockChecks(_settings.Current.DockEdge);
-        menu.Items.Add(dockMenu);
-
-        _monitorMenuItems.Clear();
-        var monitorMenu = MakeParentItem("Target Monitor", "\uE7F8");
-        var primaryMonitorItem = MakeItem("Primary Monitor (Default)", "\uE7F4", () => SelectMonitor(0), checkable: true);
-        monitorMenu.Items.Add(primaryMonitorItem);
-        _monitorMenuItems.Add((0, primaryMonitorItem));
-
-        foreach (var m in _monitor.GetMonitors())
-        {
-            int mIdx = m.Index;
-            var mItem = MakeItem(m.Name, "\uE7F4", () => SelectMonitor(mIdx), checkable: true);
-            monitorMenu.Items.Add(mItem);
-            _monitorMenuItems.Add((mIdx, mItem));
+            Application.Current?.Dispatcher.InvokeAsync(ShowNativeTrayMenu, DispatcherPriority.Input);
+            return;
         }
-        UpdateMonitorChecks(_settings.Current.TargetMonitorIndex);
-        menu.Items.Add(monitorMenu);
 
-        menu.Items.Add(new Separator());
-
-        menu.Items.Add(MakeItem("Settings...", "\uE713", () => _window.ShowSettingsWindow(0)));
-        menu.Items.Add(MakeItem("About & License", "\uE946", () => _window.ShowSettingsWindow(4)));
-        menu.Items.Add(MakeItem("Open Config & Logs", "\uE8B7", OpenAppDataFolder));
-        menu.Items.Add(MakeItem("Reload Config", "\uE72C", () => _vm.ReloadConfigCommand.Execute(null)));
-
-        menu.Items.Add(new Separator());
-
-        menu.Items.Add(MakeItem("Quit Win11Notch", "\uE711", () => _vm.ExitCommand.Execute(null)));
-
-        return menu;
-    }
-
-    private static MenuItem MakeParentItem(string header, string glyph)
-    {
-        return new MenuItem
+        int attempts = 0;
+        _rightClickReleaseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(15) };
+        _rightClickReleaseTimer.Tick += (_, _) =>
         {
-            Header = header,
-            Icon   = MakeMenuIcon(glyph)
+            attempts++;
+            if ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) == 0 || attempts >= 35)
+            {
+                _rightClickReleaseTimer.Stop();
+                ShowNativeTrayMenu();
+            }
         };
+        _rightClickReleaseTimer.Start();
     }
 
-    private static MenuItem MakeItem(string header, string glyph, Action onClick, bool checkable = false)
+    private void ShowNativeTrayMenu()
     {
-        var item = new MenuItem
+        if (_isMenuOpen || _menuOwnerHwnd == null || _menuOwnerHwnd.Handle == IntPtr.Zero) return;
+
+        _isMenuOpen = true;
+        IntPtr hMenu = CreatePopupMenu();
+        if (hMenu == IntPtr.Zero)
         {
-            Header      = header,
-            IsCheckable = checkable,
-            Icon        = checkable ? null : MakeMenuIcon(glyph)
-        };
-        item.Click += (_, _) => onClick();
-        return item;
+            _isMenuOpen = false;
+            return;
+        }
+
+        try
+        {
+            uint nextId = 1000;
+            var actions = new Dictionary<uint, Action>();
+
+            void AddCommand(IntPtr targetMenu, string label, Action action, bool isChecked = false)
+            {
+                uint id = nextId++;
+                actions[id] = action;
+                uint flags = MF_STRING | (isChecked ? MF_CHECKED : 0u);
+                AppendMenu(targetMenu, flags, (UIntPtr)id, label);
+            }
+
+            // Main actions
+            AddCommand(hMenu, "Open / Toggle Hub (Alt+Space)", () => _vm.TogglePeekCommand.Execute(null));
+            AddCommand(hMenu, "Always Show Hover Capsule", ToggleAlwaysHover, _settings.Current.AlwaysShowHoverCapsule);
+            AddCommand(hMenu, "Hide Notch Handle (Stealth)", () => _stateMachine.SetManualStealth(!_stateMachine.IsManualStealth), _stateMachine.IsManualStealth);
+            AddCommand(hMenu, "Show Greeting Banner", () => _window.TriggerGreetingBanner(durationMs: 3600, ignoreActiveCheck: true));
+
+            AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, null);
+
+            // Handle Context submenu
+            IntPtr hContext = CreatePopupMenu();
+            string curMode = _settings.Current.HandleVisibilityMode;
+            AddCommand(hContext, "Smart Desktop (Pill in Apps)", () => SelectContextMode("SmartDesktop"), curMode == "SmartDesktop");
+            AddCommand(hContext, "Desktop Only (Hide in Apps)", () => SelectContextMode("DesktopOnly"), curMode == "DesktopOnly");
+            AddCommand(hContext, "Always Show Live Preview", () => SelectContextMode("AlwaysLive"), curMode == "AlwaysLive");
+            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hContext.ToInt64(), "Handle Context");
+
+            // Dock Edge submenu
+            IntPtr hDock = CreatePopupMenu();
+            string curEdge = _settings.Current.DockEdge;
+            AddCommand(hDock, "Top Edge", () => DockAndReposition("Top"), curEdge == "Top");
+            AddCommand(hDock, "Left Edge", () => DockAndReposition("Left"), curEdge == "Left");
+            AddCommand(hDock, "Right Edge", () => DockAndReposition("Right"), curEdge == "Right");
+            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hDock.ToInt64(), "Dock Edge");
+
+            // Target Monitor submenu
+            IntPtr hMon = CreatePopupMenu();
+            int curMon = _settings.Current.TargetMonitorIndex;
+            AddCommand(hMon, "Primary Monitor (Default)", () => SelectMonitor(0), curMon == 0);
+            foreach (var m in _monitor.GetMonitors())
+            {
+                int idx = m.Index;
+                AddCommand(hMon, m.Name, () => SelectMonitor(idx), curMon == idx);
+            }
+            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hMon.ToInt64(), "Target Monitor");
+
+            AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, null);
+
+            AddCommand(hMenu, "Settings...", () => _window.ShowSettingsWindow(0));
+            AddCommand(hMenu, "About & License", () => _window.ShowSettingsWindow(4));
+            AddCommand(hMenu, "Open Config & Logs", OpenAppDataFolder);
+            AddCommand(hMenu, "Reload Config", () => _vm.ReloadConfigCommand.Execute(null));
+
+            AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, null);
+
+            AddCommand(hMenu, "Quit Win11Notch", () => _vm.ExitCommand.Execute(null));
+
+            GetCursorPos(out var pt);
+            IntPtr hwnd = _menuOwnerHwnd.Handle;
+            SetForegroundWindow(hwnd);
+            uint selectedId = TrackPopupMenuEx(
+                hMenu,
+                TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                pt.X, pt.Y,
+                hwnd,
+                IntPtr.Zero);
+            PostMessage(hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero);
+
+            if (selectedId != 0 && actions.TryGetValue(selectedId, out var selectedAction))
+            {
+                selectedAction();
+            }
+        }
+        finally
+        {
+            DestroyMenu(hMenu);
+            _isMenuOpen = false;
+        }
     }
 
-    private static TextBlock MakeMenuIcon(string glyph) => new()
+    private void ToggleAlwaysHover()
     {
-        FontFamily          = new FontFamily("Segoe Fluent Icons"),
-        Text                = glyph,
-        FontSize            = 12,
-        Foreground          = new SolidColorBrush(Color.FromRgb(0x22, 0xE5, 0x76)),
-        VerticalAlignment   = VerticalAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center
-    };
+        _settings.Current.AlwaysShowHoverCapsule = !_settings.Current.AlwaysShowHoverCapsule;
+        _ = _settings.SaveAsync();
+        _window.ApplyContextModeFromTray();
+    }
 
     private static void OpenAppDataFolder()
     {
@@ -205,35 +273,25 @@ public sealed class TrayService : IDisposable
         catch { }
     }
 
-    private void UpdateDockChecks(string edge)
-    {
-        if (_dockTopItem != null)   _dockTopItem.IsChecked   = edge == "Top";
-        if (_dockLeftItem != null)  _dockLeftItem.IsChecked  = edge == "Left";
-        if (_dockRightItem != null) _dockRightItem.IsChecked = edge == "Right";
-    }
-
     private void DockAndReposition(string edge)
     {
         _settings.Current.DockEdge = edge;
         _ = _settings.SaveAsync();
-        UpdateDockChecks(edge);
         RepositionWindow();
-    }
-
-    private void UpdateMonitorChecks(int targetIndex)
-    {
-        foreach (var (idx, item) in _monitorMenuItems)
-        {
-            item.IsChecked = idx == targetIndex;
-        }
     }
 
     private void SelectMonitor(int index)
     {
         _settings.Current.TargetMonitorIndex = index;
         _ = _settings.SaveAsync();
-        UpdateMonitorChecks(index);
         RepositionWindow();
+    }
+
+    private void SelectContextMode(string mode)
+    {
+        _settings.Current.HandleVisibilityMode = mode;
+        _ = _settings.SaveAsync();
+        _window.ApplyContextModeFromTray();
     }
 
     private void RepositionWindow()
@@ -278,6 +336,9 @@ public sealed class TrayService : IDisposable
 
     public void Dispose()
     {
+        _rightClickReleaseTimer?.Stop();
         _notifyIcon?.Unregister();
+        _menuOwnerHwnd?.Dispose();
+        _menuOwnerHwnd = null;
     }
 }

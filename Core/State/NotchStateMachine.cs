@@ -13,6 +13,8 @@ public sealed class NotchStateMachine
 
     private NotchState       _state = NotchState.Idle;
     private bool             _isManualStealth;
+    private bool             _isFullscreenStealth;
+    private bool             _isContextHidden;
     private DispatcherTimer? _dwellTimer;
     private DispatcherTimer? _graceTimer;
 
@@ -24,6 +26,10 @@ public sealed class NotchStateMachine
 
     public NotchState State => _state;
     public bool IsManualStealth => _isManualStealth;
+    public bool ShouldBeStealth => _isManualStealth || _isFullscreenStealth || _isContextHidden;
+    private NotchState RestingState => ShouldBeStealth
+        ? NotchState.Stealth
+        : (_settings.Current.AlwaysShowHoverCapsule ? NotchState.CollapsedHover : NotchState.Idle);
 
     public NotchStateMachine(SettingsService settings) => _settings = settings;
 
@@ -77,18 +83,31 @@ public sealed class NotchStateMachine
         }
     }
 
-    /// <summary>Collapses to Idle from any state (Esc / click-outside / tray action).</summary>
+    /// <summary>Collapses to resting state (Idle, Always-On HoverCapsule, or Stealth).</summary>
     public void Collapse()
     {
         _dwellTimer?.Stop();
         _graceTimer?.Stop();
-        Transition(NotchState.Idle);
+        Transition(RestingState);
     }
 
-    /// <summary>Toggle PeekExpanded ↔ Idle (hotkey or tray action).</summary>
+    /// <summary>Synchronizes the current non-Peek state when settings like AlwaysShowHoverCapsule change.</summary>
+    public void SyncRestingState()
+    {
+        if (_state == NotchState.PeekExpanded) return;
+        _dwellTimer?.Stop();
+        _graceTimer?.Stop();
+        Transition(RestingState);
+    }
+
+    /// <summary>Toggle PeekExpanded ↔ resting state (hotkey or tray action).</summary>
     public void Toggle()
     {
-        if (_state == NotchState.PeekExpanded) { Collapse(); return; }
+        if (_state == NotchState.PeekExpanded)
+        {
+            Collapse();
+            return;
+        }
         if (_isManualStealth)
         {
             _isManualStealth = false;
@@ -105,16 +124,44 @@ public sealed class NotchStateMachine
         _isManualStealth = hidden;
         _dwellTimer?.Stop();
         _graceTimer?.Stop();
-        Transition(hidden ? NotchState.Stealth : NotchState.Idle);
         ManualStealthChanged?.Invoke(this, hidden);
+        SyncStealthState(allowExitFromPeek: true);
     }
 
-    public void EnterStealth() => Transition(NotchState.Stealth);
+    public void SetContextHidden(bool hidden)
+    {
+        if (_isContextHidden == hidden) return;
+        _isContextHidden = hidden;
+        SyncStealthState(allowExitFromPeek: false);
+    }
+
+    public void EnterStealth()
+    {
+        if (_isFullscreenStealth) return;
+        _isFullscreenStealth = true;
+        SyncStealthState(allowExitFromPeek: true);
+    }
 
     public void ExitStealth()
     {
-        if (_isManualStealth) return;
-        Transition(NotchState.Idle);
+        if (!_isFullscreenStealth) return;
+        _isFullscreenStealth = false;
+        SyncStealthState(allowExitFromPeek: false);
+    }
+
+    private void SyncStealthState(bool allowExitFromPeek)
+    {
+        if (ShouldBeStealth)
+        {
+            if (_state == NotchState.PeekExpanded && !allowExitFromPeek) return;
+            _dwellTimer?.Stop();
+            _graceTimer?.Stop();
+            Transition(NotchState.Stealth);
+        }
+        else if (_state == NotchState.Stealth)
+        {
+            Transition(RestingState);
+        }
     }
 
     // ── Internals ────────────────────────────────────────────────────────────
@@ -142,7 +189,7 @@ public sealed class NotchStateMachine
         {
             _graceTimer!.Stop();
             if (_state == NotchState.CollapsedHover)
-                Transition(NotchState.Idle);
+                Transition(RestingState);
         };
         _graceTimer.Start();
     }

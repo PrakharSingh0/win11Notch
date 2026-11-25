@@ -603,6 +603,33 @@
                     <TabItem>
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="0,0,6,0">
+                                <!-- Smart Desktop & Context Behavior -->
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource HeaderLabel}" Text="Smart Desktop &amp; Context Behavior"/>
+                                        <TextBlock Style="{StaticResource SubLabel}" Text="Control whether Live Preview and the Pill appear on Desktop vs active apps."/>
+
+                                        <DockPanel Margin="0,12,0,10">
+                                            <TextBlock Text="Handle Visibility Mode" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
+                                            <ComboBox SelectedValue="{Binding HandleVisibilityMode}"
+                                                      SelectedValuePath="Tag"
+                                                      DockPanel.Dock="Right"
+                                                      Width="255"
+                                                      HorizontalAlignment="Right">
+                                                <ComboBoxItem Content="Smart Desktop (Live on Desktop, Pill in Apps)" Tag="SmartDesktop"/>
+                                                <ComboBoxItem Content="Desktop Only (Hide Pill Over Apps)" Tag="DesktopOnly"/>
+                                                <ComboBoxItem Content="Always Show Live Preview" Tag="AlwaysLive"/>
+                                            </ComboBox>
+                                        </DockPanel>
+
+                                        <CheckBox Content="Show Ambient Clock &amp; Battery glance when Desktop is idle"
+                                                  IsChecked="{Binding ShowDesktopAmbientGlance}" Margin="0,0,0,8"/>
+
+                                        <CheckBox Content="Always keep Hover Capsule visible instead of shrinking to resting pill"
+                                                  IsChecked="{Binding AlwaysShowHoverCapsule}"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Idle Handle Customization -->
                                 <Border Style="{StaticResource SettingsCard}">
                                     <StackPanel>
@@ -661,6 +688,8 @@
                                                       Width="200"
                                                       HorizontalAlignment="Right">
                                                 <ComboBoxItem Content="None (Specular Glass)" Tag="None"/>
+                                                <ComboBoxItem Content="Meteor White Line (Back &amp; Forth)" Tag="MeteorSweep"/>
+                                                <ComboBoxItem Content="Mac Apple Glow (Iridescent Aura)" Tag="MacAppleGlow"/>
                                                 <ComboBoxItem Content="Breathing Glow" Tag="BreathingGlow"/>
                                                 <ComboBoxItem Content="Rainbow Chroma Wave" Tag="RainbowWave"/>
                                                 <ComboBoxItem Content="Cyberpunk Neon Glow" Tag="NeonGlow"/>

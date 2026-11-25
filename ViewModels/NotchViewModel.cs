@@ -69,6 +69,8 @@ public sealed partial class NotchViewModel : ObservableObject
     [ObservableProperty] private bool _isFileDragOverlayVisible;
     [ObservableProperty] private bool _isDropDockHovered;
     [ObservableProperty] private bool _isDropShareHovered;
+    [ObservableProperty] private bool _hasPendingDropChoice;
+    [ObservableProperty] private string _pendingDropSummary = "Choose what to do with dropped files";
 
     // Media properties
     [ObservableProperty] private string _mediaTitle = "No Media Playing";
@@ -169,9 +171,31 @@ public sealed partial class NotchViewModel : ObservableObject
     [ObservableProperty] private bool _hasBluetoothBattery;
     [ObservableProperty] private bool _isBottomAudioMenuOpen;
 
-    public bool IsDualActivity => IsMediaPlaying && IsStopwatchRunning && _settingsService.Current.DualActivityEnabled;
-    public bool IsMediaOnlyActivity => IsMediaPlaying && (!IsStopwatchRunning || !_settingsService.Current.DualActivityEnabled);
-    public bool IsTimerOnlyActivity => !IsMediaPlaying && IsStopwatchRunning;
+    public bool IsDualActivity => ShowFullLiveActivity && IsMediaPlaying && IsStopwatchRunning && _settingsService.Current.DualActivityEnabled;
+    public bool IsMediaOnlyActivity => ShowFullLiveActivity && IsMediaPlaying && (!IsStopwatchRunning || !_settingsService.Current.DualActivityEnabled);
+    public bool IsTimerOnlyActivity => ShowFullLiveActivity && !IsMediaPlaying && IsStopwatchRunning;
+
+    [ObservableProperty] private bool _isOnDesktop = true;
+    [ObservableProperty] private string _idleMediaDisplayText = "No Media Playing";
+    private bool _showArtistInIdleTicker;
+    private DispatcherTimer? _idleTickerTimer;
+    private DispatcherTimer? _desktopClockTimer;
+
+    public bool ShowFullLiveActivity =>
+        (IsOnDesktop || _settingsService.Current.HandleVisibilityMode == "AlwaysLive")
+        && (IsMediaPlaying || IsStopwatchRunning);
+
+    public bool ShowDesktopAmbientPill =>
+        IsOnDesktop
+        && !IsMediaPlaying
+        && !IsStopwatchRunning
+        && _settingsService.Current.ShowDesktopAmbientGlance;
+
+    public bool IsAmbientDesktopActivity => ShowDesktopAmbientPill;
+    public bool IsMinimalRestingPill => !ShowFullLiveActivity && !ShowDesktopAmbientPill;
+    public bool HasCompactAppPulse => IsMinimalRestingPill && (IsMediaPlaying || IsStopwatchRunning);
+
+    partial void OnIsOnDesktopChanged(bool value) => NotifyIdlePresentationChanged();
 
     public bool IsVerticalDock => _settingsService.Current.DockEdge is "Left" or "Right";
     public bool IsHorizontalDock => !IsVerticalDock;
@@ -291,6 +315,27 @@ public sealed partial class NotchViewModel : ObservableObject
             }
             finally { _isSyncingBrightness = false; }
         };
+        _brightnessService.ExternalBrightnessChanged += val =>
+        {
+            _isSyncingBrightness = true;
+            try
+            {
+                DisplayBrightness = val;
+                IsBrightnessSupported = _brightnessService.IsBrightnessSupported;
+                BrightnessTooltip = _brightnessService.StatusTooltip;
+            }
+            finally { _isSyncingBrightness = false; }
+
+            if (_stateMachine.State is NotchState.Idle or NotchState.CollapsedHover)
+            {
+                IsVolumeToastActive = false;
+                IsPowerToastActive = false;
+                IsBrightnessToastActive = true;
+                bool collapseOnTimeout = _stateMachine.State == NotchState.Idle;
+                if (collapseOnTimeout) _stateMachine.ShowToastBanner();
+                RestartGestureHudTimer(collapseOnTimeout);
+            }
+        };
         _brightnessService.RefreshBrightnessAsync(_settingsService.Current.TargetMonitorIndex);
         UpdateGreetingState(DateTime.Now, notifyRollover: false);
         UpdateUpcomingReminder();
@@ -305,9 +350,7 @@ public sealed partial class NotchViewModel : ObservableObject
             StopwatchText = _timerService.IslandTimerText;
             OnPropertyChanged(nameof(IsStopwatchRunning));
             OnPropertyChanged(nameof(StopwatchText));
-            OnPropertyChanged(nameof(IsDualActivity));
-            OnPropertyChanged(nameof(IsMediaOnlyActivity));
-            OnPropertyChanged(nameof(IsTimerOnlyActivity));
+            NotifyIdlePresentationChanged();
         };
 
         // Wire media updates & timeline
@@ -397,6 +440,7 @@ public sealed partial class NotchViewModel : ObservableObject
                 IsFileDragOverlayVisible = false;
                 IsDropDockHovered = false;
                 IsDropShareHovered = false;
+                HasPendingDropChoice = false;
             }
 
             if (state is NotchState.CollapsedHover or NotchState.PeekExpanded)
@@ -425,6 +469,7 @@ public sealed partial class NotchViewModel : ObservableObject
             }
 
             UpdateSpectrumState();
+            NotifyIdlePresentationChanged();
         };
     }
 
@@ -456,9 +501,8 @@ public sealed partial class NotchViewModel : ObservableObject
         MediaAccentGlowBrush = CreateFrozenBrush(Color.FromArgb(0x42, accent.R, accent.G, accent.B));
 
         OnTimelineChanged();
-        OnPropertyChanged(nameof(IsDualActivity));
-        OnPropertyChanged(nameof(IsMediaOnlyActivity));
-        OnPropertyChanged(nameof(IsTimerOnlyActivity));
+        _showArtistInIdleTicker = false;
+        NotifyIdlePresentationChanged();
 
         if (CurrentState == NotchState.PeekExpanded && IsMediaPlaying)
         {
@@ -474,8 +518,10 @@ public sealed partial class NotchViewModel : ObservableObject
 
     private void UpdateSpectrumState()
     {
-        // Active while media is playing (and not in Stealth); stops completely at 0 Hz when paused/stopped
-        bool shouldRun = IsMediaPlaying && CurrentState != NotchState.Stealth;
+        // Active only when waveform bars are visible (Hover/Peek, or Idle when Full Live Preview is active)
+        bool shouldRun = IsMediaPlaying
+                         && CurrentState != NotchState.Stealth
+                         && (CurrentState != NotchState.Idle || ShowFullLiveActivity);
         if (shouldRun)
         {
             if (_spectrumTimer is { IsEnabled: false }) _spectrumTimer.Start();
@@ -1257,12 +1303,88 @@ public sealed partial class NotchViewModel : ObservableObject
 
     public void RefreshSettingsBindings()
     {
-        OnPropertyChanged(nameof(IsDualActivity));
-        OnPropertyChanged(nameof(IsMediaOnlyActivity));
-        OnPropertyChanged(nameof(IsTimerOnlyActivity));
+        NotifyIdlePresentationChanged();
         OnPropertyChanged(nameof(IsVerticalDock));
         OnPropertyChanged(nameof(IsHorizontalDock));
         _brightnessService.RefreshBrightnessAsync(_settingsService.Current.TargetMonitorIndex);
+    }
+
+    public void NotifyIdlePresentationChanged()
+    {
+        OnPropertyChanged(nameof(ShowFullLiveActivity));
+        OnPropertyChanged(nameof(ShowDesktopAmbientPill));
+        OnPropertyChanged(nameof(IsDualActivity));
+        OnPropertyChanged(nameof(IsMediaOnlyActivity));
+        OnPropertyChanged(nameof(IsTimerOnlyActivity));
+        OnPropertyChanged(nameof(IsAmbientDesktopActivity));
+        OnPropertyChanged(nameof(IsMinimalRestingPill));
+        OnPropertyChanged(nameof(HasCompactAppPulse));
+        RefreshIdleMediaDisplayText();
+        UpdateSpectrumState();
+        UpdateDesktopIdleTimers();
+    }
+
+    private void RefreshIdleMediaDisplayText()
+    {
+        if (!IsMediaPlaying)
+        {
+            IdleMediaDisplayText = MediaTitle;
+            return;
+        }
+
+        bool useArtist = _showArtistInIdleTicker && !string.IsNullOrWhiteSpace(MediaArtist);
+        IdleMediaDisplayText = useArtist ? $"♪ {MediaArtist}" : MediaTitle;
+    }
+
+    private void UpdateDesktopIdleTimers()
+    {
+        bool shouldRunMediaTicker = CurrentState == NotchState.Idle
+                                    && ShowFullLiveActivity
+                                    && IsMediaPlaying
+                                    && !string.IsNullOrWhiteSpace(MediaArtist);
+        if (shouldRunMediaTicker)
+        {
+            if (_idleTickerTimer == null)
+            {
+                _idleTickerTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                _idleTickerTimer.Tick += (_, _) =>
+                {
+                    _showArtistInIdleTicker = !_showArtistInIdleTicker;
+                    RefreshIdleMediaDisplayText();
+                };
+            }
+            if (!_idleTickerTimer.IsEnabled) _idleTickerTimer.Start();
+        }
+        else
+        {
+            _idleTickerTimer?.Stop();
+            _showArtistInIdleTicker = false;
+            RefreshIdleMediaDisplayText();
+        }
+
+        bool shouldRunAmbientClock = CurrentState == NotchState.Idle && ShowDesktopAmbientPill;
+        if (shouldRunAmbientClock)
+        {
+            if (_desktopClockTimer == null)
+            {
+                _desktopClockTimer = new DispatcherTimer();
+                _desktopClockTimer.Tick += (_, _) =>
+                {
+                    UpdateDateTime();
+                    if (_desktopClockTimer != null)
+                    {
+                        _desktopClockTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, 60 - DateTime.Now.Second));
+                    }
+                };
+            }
+            UpdateDateTime();
+            _desktopClockTimer.Interval = TimeSpan.FromSeconds(Math.Max(1, 60 - DateTime.Now.Second));
+            if (!_desktopClockTimer.IsEnabled) _desktopClockTimer.Start();
+        }
+        else
+        {
+            _desktopClockTimer?.Stop();
+        }
     }
 
     partial void OnScratchpadTextChanged(string value)

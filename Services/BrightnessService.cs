@@ -51,6 +51,7 @@ public sealed class BrightnessService : IDisposable
     public string StatusTooltip      { get; private set; } = "Adjust display brightness";
 
     public event Action<int>? BrightnessChanged;
+    public event Action<int>? ExternalBrightnessChanged;
 
     public BrightnessService(MonitorService monitorService)
     {
@@ -167,13 +168,20 @@ public sealed class BrightnessService : IDisposable
         });
     }
 
-    private void PublishBrightness(int value, bool supported)
+    private void PublishBrightness(int value, bool supported, bool fromExternalEvent = false)
     {
         if (_disposed) return;
         IsBrightnessSupported = supported;
         CurrentBrightness = Math.Clamp(value, 0, 100);
         if (supported) StatusTooltip = $"Display Brightness ({CurrentBrightness}%)";
-        Application.Current?.Dispatcher?.InvokeAsync(() => BrightnessChanged?.Invoke(CurrentBrightness));
+        Application.Current?.Dispatcher?.InvokeAsync(() =>
+        {
+            BrightnessChanged?.Invoke(CurrentBrightness);
+            if (fromExternalEvent)
+            {
+                ExternalBrightnessChanged?.Invoke(CurrentBrightness);
+            }
+        });
     }
 
     private void EnsureWmiWatcherStarted()
@@ -214,13 +222,13 @@ public sealed class BrightnessService : IDisposable
                     if (valObj == null) continue;
 
                     int newVal = Math.Clamp(Convert.ToInt32(valObj), 0, 100);
-                    bool recentLocalWrite = (Environment.TickCount64 - Interlocked.Read(ref _lastLocalWriteTicks)) < 350;
+                    bool recentLocalWrite = (Environment.TickCount64 - Interlocked.Read(ref _lastLocalWriteTicks)) < 420;
                     if (recentLocalWrite && Math.Abs(newVal - CurrentBrightness) <= 3)
                         continue;
 
                     if (newVal != CurrentBrightness || !IsBrightnessSupported)
                     {
-                        PublishBrightness(newVal, supported: true);
+                        PublishBrightness(newVal, supported: true, fromExternalEvent: true);
                     }
                 }
                 catch (COMException cex) when (cex.ErrorCode == WbemErrTimedOut)
