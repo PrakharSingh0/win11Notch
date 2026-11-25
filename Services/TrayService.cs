@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Win11Notch.Core.Settings;
@@ -11,13 +15,17 @@ using Wpf.Ui.Tray.Controls;
 namespace Win11Notch.Services;
 
 /// <summary>
-/// Manages the system tray icon and context menu using WPF-UI.Tray.
+/// Manages the system tray icon and right-click context menu using WPF-UI.Tray.
 /// </summary>
 public sealed class TrayService : IDisposable
 {
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     private readonly TrayViewModel     _vm;
     private readonly NotchWindow       _window;
-    private readonly NotchStateMachine  _stateMachine;
+    private readonly NotchStateMachine _stateMachine;
     private readonly SettingsService   _settings;
     private readonly MonitorService    _monitor;
 
@@ -25,6 +33,8 @@ public sealed class TrayService : IDisposable
     private MenuItem?   _dockTopItem;
     private MenuItem?   _dockLeftItem;
     private MenuItem?   _dockRightItem;
+    private MenuItem?   _stealthItem;
+    private readonly List<(int Index, MenuItem Item)> _monitorMenuItems = new();
 
     public TrayService(
         TrayViewModel     vm,
@@ -46,18 +56,17 @@ public sealed class TrayService : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            TooltipText       = "Win11Notch",
-            FocusOnLeftClick  = true,
-            MenuOnRightClick  = true,
-            ContextMenu       = menu,
-            Icon              = CreateDefaultIcon()
+            TooltipText      = $"Win11Notch • {GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle}",
+            FocusOnLeftClick = false,
+            MenuOnRightClick = true,
+            Menu             = menu,
+            Icon             = CreateDefaultIcon()
         };
 
 #pragma warning disable CS8622
         _notifyIcon.LeftClick += (_, _) => _stateMachine.Toggle();
 #pragma warning restore CS8622
 
-        // Wire dock-edge changes from ViewModel
         _vm.DockEdgeChanged += (_, edge) =>
         {
             UpdateDockChecks(edge);
@@ -67,7 +76,13 @@ public sealed class TrayService : IDisposable
         _vm.ConfigReloaded += (_, _) =>
         {
             UpdateDockChecks(_settings.Current.DockEdge);
+            UpdateMonitorChecks(_settings.Current.TargetMonitorIndex);
             RepositionWindow();
+        };
+
+        _stateMachine.ManualStealthChanged += (_, hidden) =>
+        {
+            if (_stealthItem != null) _stealthItem.IsChecked = hidden;
         };
 
         _notifyIcon.Register();
@@ -75,70 +90,119 @@ public sealed class TrayService : IDisposable
 
     private ContextMenu BuildMenu()
     {
-        var menu = new ContextMenu();
+        var menu = new ContextMenu
+        {
+            MinWidth = 220
+        };
 
-        var togglePeek = new MenuItem { Header = "Toggle Peek (Alt+Space)" };
-        togglePeek.Click += (_, _) => _vm.TogglePeekCommand.Execute(null);
-        menu.Items.Add(togglePeek);
+        // Ensure clicking outside dismisses the WPF tray ContextMenu cleanly on Windows 11
+        menu.Opened += (_, _) =>
+        {
+            if (_notifyIcon != null)
+            {
+                _notifyIcon.TooltipText = $"Win11Notch • {GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle}";
+            }
+            if (PresentationSource.FromVisual(menu) is HwndSource src && src.Handle != IntPtr.Zero)
+            {
+                SetForegroundWindow(src.Handle);
+            }
+        };
+
+        menu.Items.Add(MakeItem("Open / Toggle Hub (Alt+Space)", "\uE71D", () => _vm.TogglePeekCommand.Execute(null)));
+
+        _stealthItem = MakeItem("Hide Notch Handle (Stealth)", "\uED1A", () =>
+        {
+            _stateMachine.SetManualStealth(!_stateMachine.IsManualStealth);
+        }, checkable: true);
+        _stealthItem.IsChecked = _stateMachine.IsManualStealth;
+        menu.Items.Add(_stealthItem);
+
+        menu.Items.Add(MakeItem("Show Greeting Banner", "\uE706", () => _window.TriggerGreetingBanner(durationMs: 3600, ignoreActiveCheck: true)));
 
         menu.Items.Add(new Separator());
 
-        _dockTopItem = new MenuItem { Header = "Dock: Top", IsCheckable = true };
-        _dockTopItem.Click += (_, _) => DockAndReposition("Top");
-        menu.Items.Add(_dockTopItem);
-
-        _dockLeftItem = new MenuItem { Header = "Dock: Left", IsCheckable = true };
-        _dockLeftItem.Click += (_, _) => DockAndReposition("Left");
-        menu.Items.Add(_dockLeftItem);
-
-        _dockRightItem = new MenuItem { Header = "Dock: Right", IsCheckable = true };
-        _dockRightItem.Click += (_, _) => DockAndReposition("Right");
-        menu.Items.Add(_dockRightItem);
-
+        var dockMenu = MakeParentItem("Dock Edge", "\uE7F4");
+        _dockTopItem = MakeItem("Top Edge", "\uE74A", () => DockAndReposition("Top"), checkable: true);
+        _dockLeftItem = MakeItem("Left Edge", "\uE76B", () => DockAndReposition("Left"), checkable: true);
+        _dockRightItem = MakeItem("Right Edge", "\uE76C", () => DockAndReposition("Right"), checkable: true);
+        dockMenu.Items.Add(_dockTopItem);
+        dockMenu.Items.Add(_dockLeftItem);
+        dockMenu.Items.Add(_dockRightItem);
         UpdateDockChecks(_settings.Current.DockEdge);
+        menu.Items.Add(dockMenu);
 
-        var monitorMenu = new MenuItem { Header = "Target Monitor" };
-        var primaryMonitorItem = new MenuItem
-        {
-            Header = "Primary Monitor (Default)",
-            IsCheckable = true,
-            IsChecked = _settings.Current.TargetMonitorIndex == 0
-        };
-        primaryMonitorItem.Click += (_, _) => SelectMonitor(0);
+        _monitorMenuItems.Clear();
+        var monitorMenu = MakeParentItem("Target Monitor", "\uE7F8");
+        var primaryMonitorItem = MakeItem("Primary Monitor (Default)", "\uE7F4", () => SelectMonitor(0), checkable: true);
         monitorMenu.Items.Add(primaryMonitorItem);
+        _monitorMenuItems.Add((0, primaryMonitorItem));
 
-        var monitors = _monitor.GetMonitors();
-        foreach (var m in monitors)
+        foreach (var m in _monitor.GetMonitors())
         {
             int mIdx = m.Index;
-            var mItem = new MenuItem
-            {
-                Header = m.Name,
-                IsCheckable = true,
-                IsChecked = _settings.Current.TargetMonitorIndex == mIdx
-            };
-            mItem.Click += (_, _) => SelectMonitor(mIdx);
+            var mItem = MakeItem(m.Name, "\uE7F4", () => SelectMonitor(mIdx), checkable: true);
             monitorMenu.Items.Add(mItem);
+            _monitorMenuItems.Add((mIdx, mItem));
         }
+        UpdateMonitorChecks(_settings.Current.TargetMonitorIndex);
         menu.Items.Add(monitorMenu);
 
         menu.Items.Add(new Separator());
 
-        var settingsItem = new MenuItem { Header = "Settings..." };
-        settingsItem.Click += (_, _) => _window.ShowSettingsWindow();
-        menu.Items.Add(settingsItem);
-
-        var reloadConfig = new MenuItem { Header = "Reload Config" };
-        reloadConfig.Click += (_, _) => _vm.ReloadConfigCommand.Execute(null);
-        menu.Items.Add(reloadConfig);
+        menu.Items.Add(MakeItem("Settings...", "\uE713", () => _window.ShowSettingsWindow(0)));
+        menu.Items.Add(MakeItem("About & License", "\uE946", () => _window.ShowSettingsWindow(4)));
+        menu.Items.Add(MakeItem("Open Config & Logs", "\uE8B7", OpenAppDataFolder));
+        menu.Items.Add(MakeItem("Reload Config", "\uE72C", () => _vm.ReloadConfigCommand.Execute(null)));
 
         menu.Items.Add(new Separator());
 
-        var exitItem = new MenuItem { Header = "Exit" };
-        exitItem.Click += (_, _) => _vm.ExitCommand.Execute(null);
-        menu.Items.Add(exitItem);
+        menu.Items.Add(MakeItem("Quit Win11Notch", "\uE711", () => _vm.ExitCommand.Execute(null)));
 
         return menu;
+    }
+
+    private static MenuItem MakeParentItem(string header, string glyph)
+    {
+        return new MenuItem
+        {
+            Header = header,
+            Icon   = MakeMenuIcon(glyph)
+        };
+    }
+
+    private static MenuItem MakeItem(string header, string glyph, Action onClick, bool checkable = false)
+    {
+        var item = new MenuItem
+        {
+            Header      = header,
+            IsCheckable = checkable,
+            Icon        = checkable ? null : MakeMenuIcon(glyph)
+        };
+        item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    private static TextBlock MakeMenuIcon(string glyph) => new()
+    {
+        FontFamily          = new FontFamily("Segoe Fluent Icons"),
+        Text                = glyph,
+        FontSize            = 12,
+        Foreground          = new SolidColorBrush(Color.FromRgb(0x22, 0xE5, 0x76)),
+        VerticalAlignment   = VerticalAlignment.Center,
+        HorizontalAlignment = HorizontalAlignment.Center
+    };
+
+    private static void OpenAppDataFolder()
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Win11Notch");
+            Directory.CreateDirectory(dir);
+            Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+        }
+        catch { }
     }
 
     private void UpdateDockChecks(string edge)
@@ -156,10 +220,19 @@ public sealed class TrayService : IDisposable
         RepositionWindow();
     }
 
+    private void UpdateMonitorChecks(int targetIndex)
+    {
+        foreach (var (idx, item) in _monitorMenuItems)
+        {
+            item.IsChecked = idx == targetIndex;
+        }
+    }
+
     private void SelectMonitor(int index)
     {
         _settings.Current.TargetMonitorIndex = index;
         _ = _settings.SaveAsync();
+        UpdateMonitorChecks(index);
         RepositionWindow();
     }
 
@@ -173,22 +246,34 @@ public sealed class TrayService : IDisposable
 
     private static ImageSource CreateDefaultIcon()
     {
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
+        try
         {
-            // Dark slate pill with specular border (IPS aesthetic)
-            var brush = new SolidColorBrush(Color.FromRgb(0x1A, 0x1C, 0x20));
-            var pen   = new Pen(new SolidColorBrush(Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF)), 1.5);
-            dc.DrawRoundedRectangle(brush, pen, new Rect(2, 6, 28, 20), 10, 10);
-
-            // Active accent dot inside pill
-            dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)), null, new Point(16, 16), 3, 3);
+            var uri = new Uri("pack://application:,,,/Assets/app.ico", UriKind.Absolute);
+            var decoder = BitmapDecoder.Create(uri, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames
+                .OrderBy(f => Math.Abs(f.PixelWidth - 32))
+                .FirstOrDefault() ?? decoder.Frames[0];
+            frame.Freeze();
+            return frame;
         }
+        catch
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                var brush = new SolidColorBrush(Color.FromRgb(0x14, 0x16, 0x1B));
+                var pen   = new Pen(new SolidColorBrush(Color.FromArgb(0x70, 0xFF, 0xFF, 0xFF)), 1.5);
+                dc.DrawRoundedRectangle(brush, pen, new Rect(2, 2, 28, 28), 8, 8);
+                dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(0x55, 0x22, 0xE5, 0x76)), null, new Point(13, 16), 7, 7);
+                dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0x22, 0xE5, 0x76)), null, new Point(13, 16), 4.5, 4.5);
+                dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromRgb(0xDC, 0xE2, 0xEC)), null, new Rect(20, 14, 6, 4), 2, 2);
+            }
 
-        var rtb = new RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(visual);
-        rtb.Freeze();
-        return rtb;
+            var rtb = new RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(visual);
+            rtb.Freeze();
+            return rtb;
+        }
     }
 
     public void Dispose()

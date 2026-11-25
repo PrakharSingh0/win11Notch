@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Windows;
 
@@ -215,6 +216,9 @@ public sealed class AudioService : IDisposable
     private static readonly Guid PKEY_DeviceInterface_FriendlyName_Guid = new("026E516E-B814-414B-83CD-856D6FEF4822");
     private const uint PKEY_DeviceInterface_FriendlyName_Pid = 2;
 
+    private static readonly Guid PKEY_Device_ContainerId_Guid = new("8C7ED206-3F8A-4827-B3AB-AE9E1FAEFC6C");
+    private const uint PKEY_Device_ContainerId_Pid = 2;
+
     private IMMDeviceEnumerator?       _deviceEnumerator;
     private NotificationClientHandler? _notificationHandler;
     private IAudioEndpointVolume?      _cachedEndpoint;
@@ -224,6 +228,7 @@ public sealed class AudioService : IDisposable
     private readonly object            _syncLock = new();
 
     public string ActiveDeviceName { get; private set; } = "Default Playback Device";
+    public Guid   ActiveDeviceContainerId { get; private set; }
 
     public event Action<float, bool, bool>? VolumeChanged;
     public event Action<string>?            ActiveDeviceChanged;
@@ -247,6 +252,8 @@ public sealed class AudioService : IDisposable
     private int _cachedBtBattery = -1;
     private bool _isQueryingBtBattery;
     private DateTime _lastBtCheck = DateTime.MinValue;
+    private readonly ConcurrentDictionary<Guid, int> _btBatteryByContainer = new();
+    private readonly ConcurrentDictionary<string, int> _btBatteryByName = new(StringComparer.OrdinalIgnoreCase);
 
     public void RefreshActiveDevice()
     {
@@ -286,8 +293,11 @@ public sealed class AudioService : IDisposable
 
                 if (_deviceEnumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out var device) == 0 && device != null)
                 {
-                    // Query friendly device name
+                    // Query friendly device name & hardware container ID
                     string detectedName = QueryFriendlyName(device);
+                    Guid detectedCid = QueryContainerId(device);
+                    ActiveDeviceContainerId = detectedCid;
+
                     if (!string.IsNullOrWhiteSpace(detectedName))
                     {
                         bool changed = !string.Equals(ActiveDeviceName, detectedName, StringComparison.Ordinal);
@@ -297,7 +307,7 @@ public sealed class AudioService : IDisposable
                             _cachedBtBattery = -1;
                             _lastBtCheck = DateTime.MinValue;
                             ActiveDeviceChanged?.Invoke(ActiveDeviceName);
-                            _ = GetActiveBluetoothBatteryPercent();
+                            TriggerBluetoothBatteryScanIfStale(force: true);
                         }
                     }
 
@@ -370,6 +380,32 @@ public sealed class AudioService : IDisposable
         catch { /* fallback */ }
 
         return "Default Playback Device";
+    }
+
+    private static Guid QueryContainerId(IMMDevice device)
+    {
+        try
+        {
+            if (device.OpenPropertyStore(0 /* STGM_READ */, out var store) == 0 && store != null)
+            {
+                var k = new PropertyKey { fmtid = PKEY_Device_ContainerId_Guid, pid = PKEY_Device_ContainerId_Pid };
+                var pv = new PropVariant();
+                try
+                {
+                    if (store.GetValue(ref k, out pv) == 0 && pv.vt == 72 /* VT_CLSID */ && pv.pwszVal != IntPtr.Zero)
+                    {
+                        return Marshal.PtrToStructure<Guid>(pv.pwszVal);
+                    }
+                }
+                finally
+                {
+                    PropVariantClear(ref pv);
+                }
+            }
+        }
+        catch { /* fallback */ }
+
+        return Guid.Empty;
     }
 
     private void OnHardwareVolumeChanged(float volume, bool isMuted, bool isSelfTriggered)
@@ -459,11 +495,14 @@ public sealed class AudioService : IDisposable
                                 if (dev.GetId(out string id) == 0)
                                 {
                                     string name = QueryFriendlyName(dev);
+                                    Guid cid = QueryContainerId(dev);
                                     result.Add(new AudioDeviceItem
                                     {
                                         Id = id,
                                         Name = name,
-                                        IsDefault = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase)
+                                        ContainerId = cid,
+                                        IsDefault = string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase),
+                                        BluetoothBatteryPercent = GetBluetoothBatteryForDevice(cid, name)
                                     });
                                 }
                             }
@@ -473,6 +512,7 @@ public sealed class AudioService : IDisposable
             }
             catch { /* best effort */ }
         }
+        TriggerBluetoothBatteryScanIfStale(force: false);
         return result;
     }
 
@@ -494,103 +534,221 @@ public sealed class AudioService : IDisposable
         }
     }
 
+    private static bool IsLikelyWiredOrDisplayAudio(string name)
+    {
+        return name.Contains("Realtek", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("AMD", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("Display Audio", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("HDMI", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("USB Audio", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeBtName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+        string s = raw.Trim();
+        string[] prefixes = { "Headphones (", "Headset (", "Speakers (" };
+        foreach (var p in prefixes)
+        {
+            if (s.StartsWith(p, StringComparison.OrdinalIgnoreCase) && s.EndsWith(')'))
+            {
+                s = s.Substring(p.Length, s.Length - p.Length - 1);
+                break;
+            }
+        }
+
+        string[] suffixes = { " Hands-Free AG", " Hands-Free HF", " Hands-Free", " Avrcp Transport", " A2DP SNK", " Stereo", " Audio" };
+        foreach (var suf in suffixes)
+        {
+            s = s.Replace(suf, string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return s.Trim(' ', '(', ')', '-', '_');
+    }
+
+    public int GetBluetoothBatteryForDevice(Guid containerId, string audioDeviceName)
+    {
+        // 1. Exact hardware ContainerId match (links AudioEndpoint <-> BTHENUM HFP/A2DP DevNode)
+        if (containerId != Guid.Empty && _btBatteryByContainer.TryGetValue(containerId, out int byCid) && byCid > 0)
+        {
+            return byCid;
+        }
+
+        if (string.IsNullOrWhiteSpace(audioDeviceName) || IsLikelyWiredOrDisplayAudio(audioDeviceName))
+        {
+            return -1;
+        }
+
+        // 2. Normalized device-name fallback
+        string normAudio = NormalizeBtName(audioDeviceName);
+        int bestPercent = -1;
+        int bestMatchLen = 0;
+
+        foreach (var kv in _btBatteryByName)
+        {
+            if (string.IsNullOrWhiteSpace(kv.Key) || kv.Value <= 0) continue;
+
+            if (audioDeviceName.Contains(kv.Key, StringComparison.OrdinalIgnoreCase) ||
+                kv.Key.Contains(audioDeviceName, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(normAudio) &&
+                 (normAudio.Contains(kv.Key, StringComparison.OrdinalIgnoreCase) ||
+                  kv.Key.Contains(normAudio, StringComparison.OrdinalIgnoreCase))))
+            {
+                if (kv.Key.Length > bestMatchLen)
+                {
+                    bestMatchLen = kv.Key.Length;
+                    bestPercent = kv.Value;
+                }
+            }
+        }
+
+        return bestPercent;
+    }
+
     public int GetActiveBluetoothBatteryPercent()
     {
-        if ((DateTime.UtcNow - _lastBtCheck).TotalSeconds > 12 && !_isQueryingBtBattery)
+        TriggerBluetoothBatteryScanIfStale(force: false);
+        return _cachedBtBattery;
+    }
+
+    private void TriggerBluetoothBatteryScanIfStale(bool force)
+    {
+        if ((!force && (DateTime.UtcNow - _lastBtCheck).TotalSeconds <= 10) || _isQueryingBtBattery)
+            return;
+
+        _isQueryingBtBattery = true;
+        _lastBtCheck = DateTime.UtcNow;
+        string currentAudioName = ActiveDeviceName;
+        Guid currentContainerId = ActiveDeviceContainerId;
+
+        _ = Task.Run(async () =>
         {
-            _isQueryingBtBattery = true;
-            _lastBtCheck = DateTime.UtcNow;
-            string currentAudioName = ActiveDeviceName;
-
-            _ = Task.Run(async () =>
+            try
             {
-                try
+                const string BatteryPropertyKey = "{104ea319-6ee2-4701-bd47-8ddbf425bbe5} 2";
+                const string ContainerIdKey     = "System.Devices.ContainerId";
+                const string IsConnectedKey     = "System.Devices.Aep.IsConnected";
+                const string IsPresentKey       = "System.Devices.Present";
+                string[] props = { BatteryPropertyKey, ContainerIdKey, IsConnectedKey, IsPresentKey };
+
+                var scannedByCid  = new Dictionary<Guid, int>();
+                var scannedByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                void RecordBattery(Windows.Devices.Enumeration.DeviceInformation dev, bool requireConnected)
                 {
-                    const string BatteryPropertyKey = "{104ea319-6ee2-4701-bd47-8ddbf425bbe5} 2";
-                    const string IsConnectedKey     = "System.Devices.Aep.IsConnected";
-                    string[] props = { BatteryPropertyKey, IsConnectedKey };
+                    if (!dev.Properties.TryGetValue(BatteryPropertyKey, out var val) || val == null)
+                        return;
 
-                    // Check if the active playback endpoint is likely non-Bluetooth (e.g. built-in Realtek speakers)
-                    bool isLikelyNonBt = currentAudioName.Contains("Realtek", StringComparison.OrdinalIgnoreCase)
-                                      || currentAudioName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
-                                      || currentAudioName.Contains("AMD", StringComparison.OrdinalIgnoreCase)
-                                      || currentAudioName.Contains("Display Audio", StringComparison.OrdinalIgnoreCase);
+                    int percent = Convert.ToInt32(val);
+                    if (percent <= 0 || percent > 100) return;
 
-                    int found = -1;
-                    int fallbackConnectedBt = -1;
-
-                    // Query Classic Bluetooth (HFP/Hands-Free) + BLE connected devices + PnP battery containers
-                    var selectors = new[]
+                    if (requireConnected)
                     {
-                        Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromConnectionStatus(
-                            Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected),
-                        Windows.Devices.Bluetooth.BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(
-                            Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected),
-                        "System.Devices.DevObjectType:=5" // PnP Device Nodes holding HFP battery level
-                    };
-
-                    foreach (var selector in selectors)
-                    {
-                        try
-                        {
-                            var devs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(selector, props);
-                            if (devs == null) continue;
-
-                            foreach (var dev in devs)
-                            {
-                                if (!dev.Properties.TryGetValue(BatteryPropertyKey, out var val) || val == null)
-                                    continue;
-
-                                int percent = Convert.ToInt32(val);
-                                if (percent <= 0 || percent > 100) continue;
-
-                                bool nameMatch = !string.IsNullOrWhiteSpace(dev.Name) &&
-                                    (currentAudioName.Contains(dev.Name, StringComparison.OrdinalIgnoreCase) ||
-                                     dev.Name.Contains(currentAudioName, StringComparison.OrdinalIgnoreCase));
-
-                                if (nameMatch)
-                                {
-                                    found = percent;
-                                    break;
-                                }
-
-                                bool connected = !dev.Properties.TryGetValue(IsConnectedKey, out var connObj)
-                                                 || connObj is not bool b || b;
-                                if (connected && fallbackConnectedBt < 0)
-                                {
-                                    fallbackConnectedBt = percent;
-                                }
-                            }
-
-                            if (found > 0) break;
-                        }
-                        catch { }
+                        bool present = !dev.Properties.TryGetValue(IsPresentKey, out var presObj)
+                                       || presObj is not bool p || p;
+                        bool connected = !dev.Properties.TryGetValue(IsConnectedKey, out var connObj)
+                                         || connObj is not bool c || c;
+                        if (!present || !connected) return;
                     }
 
-                    // Only use fallback connected BT battery if current output is not known wired/display audio
-                    int resolved = found > 0 ? found : (isLikelyNonBt ? -1 : fallbackConnectedBt);
-
-                    if (_cachedBtBattery != resolved)
+                    Guid cid = Guid.Empty;
+                    if (dev.Properties.TryGetValue(ContainerIdKey, out var cidObj))
                     {
-                        _cachedBtBattery = resolved;
-                        if (Application.Current?.Dispatcher != null)
+                        if (cidObj is Guid g) cid = g;
+                        else if (cidObj is string s && Guid.TryParse(s, out var parsed)) cid = parsed;
+                    }
+
+                    if (cid != Guid.Empty)
+                    {
+                        scannedByCid[cid] = percent;
+                    }
+
+                    string norm = NormalizeBtName(dev.Name);
+                    if (!string.IsNullOrWhiteSpace(norm))
+                    {
+                        scannedByName[norm] = percent;
+                    }
+                }
+
+                // 1. Query PnP Device Nodes (DeviceInformationKind.Device) — where Windows HFP AG Audio & BTHLE battery levels live
+                try
+                {
+                    var pnpDevs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(
+                        string.Empty,
+                        props,
+                        Windows.Devices.Enumeration.DeviceInformationKind.Device);
+                    if (pnpDevs != null)
+                    {
+                        foreach (var dev in pnpDevs)
                         {
-                            _ = Application.Current.Dispatcher.InvokeAsync(() => BluetoothBatteryChanged?.Invoke(resolved));
-                        }
-                        else
-                        {
-                            BluetoothBatteryChanged?.Invoke(resolved);
+                            RecordBattery(dev, requireConnected: true);
                         }
                     }
                 }
                 catch { }
-                finally
+
+                // 2. Also query connected Classic Bluetooth & BLE AssociationEndpoints as backup
+                var aepSelectors = new[]
                 {
-                    _isQueryingBtBattery = false;
+                    Windows.Devices.Bluetooth.BluetoothDevice.GetDeviceSelectorFromConnectionStatus(
+                        Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected),
+                    Windows.Devices.Bluetooth.BluetoothLEDevice.GetDeviceSelectorFromConnectionStatus(
+                        Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected)
+                };
+
+                foreach (var selector in aepSelectors)
+                {
+                    try
+                    {
+                        var devs = await Windows.Devices.Enumeration.DeviceInformation.FindAllAsync(
+                            selector,
+                            props,
+                            Windows.Devices.Enumeration.DeviceInformationKind.AssociationEndpoint);
+                        if (devs == null) continue;
+
+                        foreach (var dev in devs)
+                        {
+                            RecordBattery(dev, requireConnected: true);
+                        }
+                    }
+                    catch { }
                 }
-            });
-        }
-        return _cachedBtBattery;
+
+                bool cidChanged = scannedByCid.Count != _btBatteryByContainer.Count ||
+                                  scannedByCid.Any(kv => !_btBatteryByContainer.TryGetValue(kv.Key, out int prev) || prev != kv.Value);
+                bool nameChanged = scannedByName.Count != _btBatteryByName.Count ||
+                                   scannedByName.Any(kv => !_btBatteryByName.TryGetValue(kv.Key, out int prev) || prev != kv.Value);
+
+                _btBatteryByContainer.Clear();
+                foreach (var kv in scannedByCid) _btBatteryByContainer[kv.Key] = kv.Value;
+
+                _btBatteryByName.Clear();
+                foreach (var kv in scannedByName) _btBatteryByName[kv.Key] = kv.Value;
+
+                int resolved = GetBluetoothBatteryForDevice(currentContainerId, currentAudioName);
+                bool activeChanged = _cachedBtBattery != resolved;
+                _cachedBtBattery = resolved;
+
+                if (activeChanged || cidChanged || nameChanged)
+                {
+                    if (Application.Current?.Dispatcher != null)
+                    {
+                        _ = Application.Current.Dispatcher.InvokeAsync(() => BluetoothBatteryChanged?.Invoke(resolved));
+                    }
+                    else
+                    {
+                        BluetoothBatteryChanged?.Invoke(resolved);
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                _isQueryingBtBattery = false;
+            }
+        });
     }
 
     public (float Left, float Right, float Peak) GetAudioPeakLevels()

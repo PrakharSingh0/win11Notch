@@ -10,6 +10,7 @@
         ShowInTaskbar="False"
         ResizeMode="NoResize"
         AllowDrop="True"
+        Icon="pack://application:,,,/Assets/app.ico"
         PreviewMouseLeftButtonDown="OnWindowPreviewMouseLeftButtonDown"
         Width="72" Height="8">
 
@@ -289,7 +290,7 @@
         <Style x:Key="FluentSegmentedTabItem" TargetType="TabItem">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#8E9098"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="1,0"/>
@@ -299,7 +300,7 @@
                     <ControlTemplate TargetType="TabItem">
                         <Border x:Name="tabBd" Background="{TemplateBinding Background}"
                                 BorderBrush="Transparent" BorderThickness="1"
-                                CornerRadius="9" Padding="10,5">
+                                CornerRadius="9" Padding="8.5,5">
                             <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -316,86 +317,6 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-        </Style>
-
-        <!-- Dynamic Island 4-Bar Equalizer (Coral-Orange Signature Accent) -->
-        <Style x:Key="EqualizerBarBase" TargetType="Rectangle">
-            <Setter Property="Width" Value="2.5"/>
-            <Setter Property="RadiusX" Value="1.25"/>
-            <Setter Property="RadiusY" Value="1.25"/>
-            <Setter Property="Fill" Value="#FF5E36"/>
-            <Setter Property="VerticalAlignment" Value="Bottom"/>
-            <Setter Property="Height" Value="3"/>
-        </Style>
-
-        <Style x:Key="EqualizerBar1" TargetType="Rectangle" BasedOn="{StaticResource EqualizerBarBase}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsMediaPlaying}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard x:Name="PlayAnim1">
-                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                <DoubleAnimation Storyboard.TargetProperty="Height" From="3" To="11" Duration="0:0:0.42">
-                                    <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions><StopStoryboard BeginStoryboardName="PlayAnim1"/></DataTrigger.ExitActions>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="EqualizerBar2" TargetType="Rectangle" BasedOn="{StaticResource EqualizerBarBase}">
-            <Setter Property="Fill" Value="#FF815E"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsMediaPlaying}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard x:Name="PlayAnim2">
-                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                <DoubleAnimation Storyboard.TargetProperty="Height" From="3" To="14" Duration="0:0:0.58">
-                                    <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions><StopStoryboard BeginStoryboardName="PlayAnim2"/></DataTrigger.ExitActions>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="EqualizerBar3" TargetType="Rectangle" BasedOn="{StaticResource EqualizerBarBase}">
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsMediaPlaying}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard x:Name="PlayAnim3">
-                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                <DoubleAnimation Storyboard.TargetProperty="Height" From="3" To="9" Duration="0:0:0.36">
-                                    <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions><StopStoryboard BeginStoryboardName="PlayAnim3"/></DataTrigger.ExitActions>
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="EqualizerBar4" TargetType="Rectangle" BasedOn="{StaticResource EqualizerBarBase}">
-            <Setter Property="Fill" Value="#FF9E80"/>
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding IsMediaPlaying}" Value="True">
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard x:Name="PlayAnim4">
-                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                <DoubleAnimation Storyboard.TargetProperty="Height" From="3" To="12" Duration="0:0:0.64">
-                                    <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions><StopStoryboard BeginStoryboardName="PlayAnim4"/></DataTrigger.ExitActions>
-                </DataTrigger>
-            </Style.Triggers>
         </Style>
 
         <!-- Metric Progress Bar (Smooth rounded pill bar) -->
@@ -537,12 +458,16 @@
                             </Grid>
                         </Border>
                         <TextBlock Text="{Binding MediaTitle}" Foreground="White" FontSize="10.5" FontWeight="SemiBold" MaxWidth="74" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,0,0" Height="11">
-                            <Rectangle Style="{StaticResource EqualizerBar1}" Margin="0.7,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar2}" Margin="0.7,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar3}" Margin="0.7,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar4}" Margin="0.7,0"/>
-                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding CompactWaveBars}" Margin="5,0,0,0" Height="11" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Rectangle Width="2.5" RadiusX="1.25" RadiusY="1.25" Height="{Binding Height}" Fill="#FF5E36" VerticalAlignment="Bottom" Margin="0.7,0"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
                         <Border Width="1" Height="11" Background="#32FFFFFF" Margin="8,0" VerticalAlignment="Center"/>
 
@@ -560,12 +485,16 @@
                             </Grid>
                         </Border>
                         <TextBlock Text="{Binding MediaTitle}" Foreground="White" FontSize="10.5" FontWeight="SemiBold" MaxWidth="92" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Height="11">
-                            <Rectangle Style="{StaticResource EqualizerBar1}" Margin="0.8,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar2}" Margin="0.8,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar3}" Margin="0.8,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar4}" Margin="0.8,0"/>
-                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding CompactWaveBars}" Margin="6,0,0,0" Height="11" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Rectangle Width="2.5" RadiusX="1.25" RadiusY="1.25" Height="{Binding Height}" Fill="#FF5E36" VerticalAlignment="Bottom" Margin="0.8,0"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
 
                     <!-- Presentation 3: Single Timer Activity -->
@@ -587,12 +516,16 @@
                                 <Image Source="{Binding MediaThumbnail}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                             </Grid>
                         </Border>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Height="12" Margin="0,0,0,6">
-                            <Rectangle Style="{StaticResource EqualizerBar1}" Margin="0.6,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar2}" Margin="0.6,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar3}" Margin="0.6,0"/>
-                            <Rectangle Style="{StaticResource EqualizerBar4}" Margin="0.6,0"/>
-                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding CompactWaveBars}" HorizontalAlignment="Center" Height="12" Margin="0,0,0,6">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Rectangle Width="2.5" RadiusX="1.25" RadiusY="1.25" Height="{Binding Height}" Fill="#FF5E36" VerticalAlignment="Bottom" Margin="0.6,0"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
 
                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE916;" Foreground="#FF5E36" FontSize="11" HorizontalAlignment="Center"
@@ -637,6 +570,9 @@
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsPowerToastActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsBrightnessToastActive}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -711,13 +647,17 @@
                                     </Button.Template>
                                 </Button>
 
-                                <!-- 4-bar Waveform Equalizer -->
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Height="13">
-                                    <Rectangle Style="{StaticResource EqualizerBar1}" Margin="1,0"/>
-                                    <Rectangle Style="{StaticResource EqualizerBar2}" Margin="1,0"/>
-                                    <Rectangle Style="{StaticResource EqualizerBar3}" Margin="1,0"/>
-                                    <Rectangle Style="{StaticResource EqualizerBar4}" Margin="1,0"/>
-                                </StackPanel>
+                                <!-- 4-bar Reactive Waveform (WASAPI-driven real-time audio peaks) -->
+                                <ItemsControl ItemsSource="{Binding CompactWaveBars}" VerticalAlignment="Center" Margin="6,0,0,0" Height="13">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" VerticalAlignment="Bottom"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Rectangle Width="2.5" RadiusX="1.25" RadiusY="1.25" Height="{Binding Height}" Fill="#FF5E36" VerticalAlignment="Bottom" Margin="1,0"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
 
                             <!-- B. Unified Timer Micro-Pill with In-Place Pause -->
@@ -765,7 +705,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- D. Idle Date -->
+                            <!-- D. Idle Date & Optional Upcoming Reminder Pill -->
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <StackPanel.Style>
                                     <Style TargetType="StackPanel">
@@ -783,6 +723,15 @@
                                 </StackPanel.Style>
                                 <TextBlock Text="•" Foreground="#45FFFFFF" Margin="8,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding DateText}" Foreground="#A8ACB4" FontSize="11.5" VerticalAlignment="Center"/>
+
+                                <Border Style="{StaticResource MicroPillBadge}" Margin="7,0,0,0" Padding="6,2"
+                                        Visibility="{Binding HasUpcomingReminder, Converter={StaticResource BoolToVis}}"
+                                        ToolTip="{Binding UpcomingReminderText}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" Foreground="#FFD54F" FontSize="9.5" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding UpcomingReminderText}" Foreground="#F0FFFFFF" FontSize="10" FontWeight="SemiBold" MaxWidth="92" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
 
                             <!-- E. Live Download Speed Micro-Pill -->
@@ -854,6 +803,32 @@
                         <TextBlock Text="{Binding PowerToastTitle}" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <TextBlock Text=" • " Foreground="#50FFFFFF" FontSize="12" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding PowerToastDetail}" Foreground="#B0B4BC" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- 4. Dynamic Island Display Brightness HUD -->
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center"
+                                Margin="8,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBrightnessToastActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+
+                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE706;" Foreground="#FFD54F" FontSize="13.5" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding DisplayBrightness, StringFormat='{}{0}%'}"
+                                   Foreground="White" FontSize="12" FontWeight="Bold"
+                                   Width="38" Margin="8,0,6,0" VerticalAlignment="Center"/>
+                        <ProgressBar Style="{StaticResource MetricProgressBarStyle}"
+                                     Foreground="#FFD54F"
+                                     Value="{Binding DisplayBrightness, Mode=OneWay}" Maximum="100"
+                                     Width="126" VerticalAlignment="Center"/>
                     </StackPanel>
 
                 </Grid>
@@ -1085,7 +1060,12 @@
                                                                     <DockPanel LastChildFill="True">
                                                                         <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#FF5E36" FontSize="11" Margin="6,0,0,0" DockPanel.Dock="Right"
                                                                                    Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
-                                                                        <TextBlock Text="{Binding Name}" Foreground="White" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="6,0,0,0"
+                                                                                    Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}">
+                                                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="9.5" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                                                                            <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                        </StackPanel>
+                                                                        <TextBlock Text="{Binding Name}" Foreground="White" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                                     </DockPanel>
                                                                 </Button>
                                                             </DataTemplate>
@@ -1664,6 +1644,9 @@
                                                         <TextBlock Text="Snip" FontSize="10.5" FontWeight="SemiBold"/>
                                                     </StackPanel>
                                                 </Button>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ShareDockDirectlyCommand}" Background="#22FF5E36" Padding="5,3" Margin="4,0,0,0" ToolTip="Send Dock Files via Google Quick Share">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="10.5" Foreground="#FF5E36"/>
+                                                </Button>
                                                 <Button Style="{StaticResource NotchIconBtn}" Command="{Binding CopyShelfPathsCommand}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Copy File Paths">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8C8;" FontSize="10.5" Foreground="#C0FFFFFF"/>
                                                 </Button>
@@ -2079,7 +2062,6 @@
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="*"/>
                                         </Grid.RowDefinitions>
 
@@ -2088,12 +2070,19 @@
                                             <Button Command="{Binding ToggleAddCalendarEventCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
-                                                        <Border CornerRadius="8" Padding="9,3.5" Background="#FF5E36">
+                                                        <Border x:Name="newBd" CornerRadius="8" Padding="9,3.5" Background="#FF5E36">
                                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE710;" FontSize="9.5" Foreground="White" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                                <TextBlock Text="New" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                <TextBlock x:Name="newIco" FontFamily="Segoe Fluent Icons" Text="&#xE710;" FontSize="9.5" Foreground="White" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                <TextBlock x:Name="newTxt" Text="New" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                                             </StackPanel>
                                                         </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.IsAddingCalendarEvent, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                <Setter TargetName="newBd" Property="Background" Value="#24FFFFFF"/>
+                                                                <Setter TargetName="newIco" Property="Text" Value="&#xE711;"/>
+                                                                <Setter TargetName="newTxt" Property="Text" Value="Cancel"/>
+                                                            </DataTrigger>
+                                                        </ControlTemplate.Triggers>
                                                     </ControlTemplate>
                                                 </Button.Template>
                                             </Button>
@@ -2104,177 +2093,306 @@
                                             </StackPanel>
                                         </DockPanel>
 
-                                        <!-- Inline Event & Reminder Composer -->
-                                        <Border Grid.Row="1" Visibility="{Binding IsAddingCalendarEvent, Converter={StaticResource BoolToVis}}"
-                                                Background="#14FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="10" Padding="8" Margin="0,0,0,8">
-                                            <StackPanel>
-                                                <Border Background="#18000000" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="7" Padding="7,4" Margin="0,0,0,6">
-                                                    <Grid>
-                                                        <TextBlock Text="Event or reminder title..." Foreground="#55FFFFFF" FontSize="11.5" VerticalAlignment="Center" IsHitTestVisible="False">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding NewCalendarTitle}" Value="">
-                                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
-                                                        <TextBox Text="{Binding NewCalendarTitle, UpdateSourceTrigger=PropertyChanged}"
-                                                                 Background="Transparent" Foreground="White" CaretBrush="#FF5E36" BorderThickness="0" FontSize="12"/>
-                                                    </Grid>
-                                                </Border>
+                                        <!-- Dedicated Event & Reminder Composer View (cleanly replaces list area while editing to eliminate any overlap) -->
+                                        <ScrollViewer Grid.Row="1"
+                                                      Visibility="{Binding IsAddingCalendarEvent, Converter={StaticResource BoolToVis}}"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <Border Background="#14FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="10" Padding="10">
+                                                <StackPanel>
+                                                    <!-- Title Input -->
+                                                    <Border Background="#18000000" BorderBrush="#2CFFFFFF" BorderThickness="1" CornerRadius="8" Padding="8,5" Margin="0,0,0,9">
+                                                        <Grid>
+                                                            <TextBlock Text="Event or reminder title..." Foreground="#58FFFFFF" FontSize="11.5" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding NewCalendarTitle}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBox Text="{Binding NewCalendarTitle, UpdateSourceTrigger=PropertyChanged}"
+                                                                     Background="Transparent" Foreground="White" CaretBrush="#FF5E36" BorderThickness="0" FontSize="12"/>
+                                                        </Grid>
+                                                    </Border>
 
-                                                <DockPanel LastChildFill="False" Margin="0,0,0,6">
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
-                                                        <CheckBox IsChecked="{Binding NewCalendarIsReminder}" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White">
-                                                            <TextBlock Text="Reminder" Foreground="#E0FFFFFF" FontSize="11" VerticalAlignment="Center"/>
-                                                        </CheckBox>
-                                                        <CheckBox IsChecked="{Binding NewCalendarIsAllDay}" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White">
-                                                            <TextBlock Text="All day" Foreground="#B0FFFFFF" FontSize="11" VerticalAlignment="Center"/>
-                                                        </CheckBox>
-                                                        <Border Background="#18000000" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="6" Padding="6,2">
-                                                            <Border.Style>
-                                                                <Style TargetType="Border">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding NewCalendarIsAllDay}" Value="True">
-                                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </Border.Style>
-                                                            <TextBox Text="{Binding NewCalendarTime, UpdateSourceTrigger=PropertyChanged}"
-                                                                     Width="40" Background="Transparent" Foreground="White" CaretBrush="#FF5E36"
-                                                                     BorderThickness="0" FontSize="11" HorizontalContentAlignment="Center"/>
+                                                    <!-- Kind Segmented Toggle (Reminder vs Event) -->
+                                                    <DockPanel Margin="0,0,0,9" LastChildFill="False">
+                                                        <TextBlock Text="Type" Foreground="#8E9098" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="2,0,10,0"/>
+                                                        <Border Background="#12FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="8" Padding="2" DockPanel.Dock="Right">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Button Command="{Binding SetCalendarTypeCommand}" CommandParameter="True" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                    <Button.Template>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border x:Name="pill" CornerRadius="6" Padding="10,4" Background="Transparent">
+                                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" FontSize="10" Foreground="#FF5E36" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                                    <TextBlock Text="Reminder" Foreground="#E0FFFFFF" FontSize="11" FontWeight="SemiBold"/>
+                                                                                </StackPanel>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <DataTrigger Binding="{Binding DataContext.NewCalendarIsReminder, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                    <Setter TargetName="pill" Property="Background" Value="#2CFF5E36"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Button.Template>
+                                                                </Button>
+                                                                <Button Command="{Binding SetCalendarTypeCommand}" CommandParameter="False" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="2,0,0,0">
+                                                                    <Button.Template>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border x:Name="pill" CornerRadius="6" Padding="10,4" Background="Transparent">
+                                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="10" Foreground="#00E5FF" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                                    <TextBlock Text="Event" Foreground="#E0FFFFFF" FontSize="11" FontWeight="SemiBold"/>
+                                                                                </StackPanel>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <DataTrigger Binding="{Binding DataContext.NewCalendarIsEvent, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                    <Setter TargetName="pill" Property="Background" Value="#2C00E5FF"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Button.Template>
+                                                                </Button>
+                                                            </StackPanel>
                                                         </Border>
-                                                    </StackPanel>
-                                                </DockPanel>
+                                                    </DockPanel>
 
-                                                <DockPanel>
-                                                    <Button Command="{Binding SaveNewCalendarItemCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
-                                                        <Button.Template>
-                                                            <ControlTemplate TargetType="Button">
-                                                                <Border CornerRadius="7" Padding="10,4" Background="#FF5E36">
-                                                                    <TextBlock Text="Save" Foreground="White" FontSize="11" FontWeight="Bold"/>
-                                                                </Border>
-                                                            </ControlTemplate>
-                                                        </Button.Template>
-                                                    </Button>
+                                                    <!-- Time & All-Day Controls -->
+                                                    <DockPanel Margin="0,0,0,10" LastChildFill="False">
+                                                        <TextBlock Text="Schedule" Foreground="#8E9098" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="2,0,10,0"/>
 
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FF5E36" Padding="3">
-                                                            <Ellipse Width="12" Height="12" Fill="#FF5E36"/>
-                                                        </Button>
-                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#00E5FF" Padding="3">
-                                                            <Ellipse Width="12" Height="12" Fill="#00E5FF"/>
-                                                        </Button>
-                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#69F0AE" Padding="3">
-                                                            <Ellipse Width="12" Height="12" Fill="#69F0AE"/>
-                                                        </Button>
-                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FFD600" Padding="3">
-                                                            <Ellipse Width="12" Height="12" Fill="#FFD600"/>
-                                                        </Button>
-                                                    </StackPanel>
-                                                </DockPanel>
-                                            </StackPanel>
-                                        </Border>
+                                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                                            <Border Background="#18000000" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="7,3" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding NewCalendarIsAllDay}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE823;" FontSize="10" Foreground="#8E9098" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                    <TextBox Text="{Binding NewCalendarTime, UpdateSourceTrigger=PropertyChanged}"
+                                                                             Width="44" Background="Transparent" Foreground="White" CaretBrush="#FF5E36"
+                                                                             BorderThickness="0" FontSize="11.5" HorizontalContentAlignment="Center" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </Border>
 
-                                        <!-- Empty Day Agenda State -->
-                                        <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <StackPanel.Style>
-                                                <Style TargetType="StackPanel">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Calendar.SelectedDayItems.Count}" Value="0">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </StackPanel.Style>
-                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="24" Foreground="#38FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                            <TextBlock Text="No events or reminders" Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="Tap + New to schedule on this day" Foreground="#48FFFFFF" FontSize="10.5" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                        </StackPanel>
-
-                                        <!-- Selected Day Events & Reminders List -->
-                                        <ListBox Grid.Row="2" ItemsSource="{Binding Calendar.SelectedDayItems}"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
-                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Border Background="#12FFFFFF" BorderBrush="#1EFFFFFF" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,2.5">
-                                                        <DockPanel LastChildFill="True">
-                                                            <Button Style="{StaticResource NotchIconBtn}"
-                                                                    Command="{Binding DataContext.RemoveCalendarItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    DockPanel.Dock="Right" Padding="4,2" ToolTip="Delete">
-                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9.5" Foreground="#68FFFFFF"/>
-                                                            </Button>
-
-                                                            <!-- Samsung-style Circular Reminder Checkbox -->
-                                                            <Button Command="{Binding DataContext.ToggleCalendarItemCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"
-                                                                    DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                            <Button Command="{Binding ToggleCalendarAllDayCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" VerticalAlignment="Center">
                                                                 <Button.Template>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="chk" Width="18" Height="18" CornerRadius="9" BorderThickness="1.5" BorderBrush="{Binding AccentHex}" Background="Transparent">
-                                                                            <TextBlock x:Name="tick" FontFamily="Segoe Fluent Icons" Text="&#xE73E;" FontSize="9.5" Foreground="#101216" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                                                        <Border x:Name="allBd" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="9,4">
+                                                                            <TextBlock x:Name="allTxt" Text="All Day" Foreground="#B0B4BC" FontSize="11" FontWeight="SemiBold"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
-                                                                                <Setter TargetName="chk" Property="Background" Value="{Binding AccentHex}"/>
-                                                                                <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarIsAllDay, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                <Setter TargetName="allBd" Property="Background" Value="#2CFF5E36"/>
+                                                                                <Setter TargetName="allBd" Property="BorderBrush" Value="#80FF5E36"/>
+                                                                                <Setter TargetName="allTxt" Property="Foreground" Value="White"/>
                                                                             </DataTrigger>
                                                                         </ControlTemplate.Triggers>
                                                                     </ControlTemplate>
                                                                 </Button.Template>
                                                             </Button>
+                                                        </StackPanel>
+                                                    </DockPanel>
 
-                                                            <!-- Vertical Accent Pill Bar for Calendar Events -->
-                                                            <Border Width="3.5" Height="22" CornerRadius="1.75" Background="{Binding AccentHex}" Margin="0,0,8,0" DockPanel.Dock="Left" VerticalAlignment="Center">
-                                                                <Border.Style>
-                                                                    <Style TargetType="Border">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsReminder}" Value="False">
-                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                    <!-- Accent Color Tag & Save Action -->
+                                                    <DockPanel LastChildFill="False">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                                            <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FF5E36" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                            <Ellipse Fill="#FF5E36"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarAccentHex, RelativeSource={RelativeSource AncestorType=Window}}" Value="#FF5E36">
+                                                                                <Setter TargetName="ring" Property="BorderBrush" Value="White"/>
                                                                             </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Border.Style>
-                                                            </Border>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                            </Button>
+                                                            <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#00E5FF" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                            <Ellipse Fill="#00E5FF"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarAccentHex, RelativeSource={RelativeSource AncestorType=Window}}" Value="#00E5FF">
+                                                                                <Setter TargetName="ring" Property="BorderBrush" Value="White"/>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                            </Button>
+                                                            <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#69F0AE" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                            <Ellipse Fill="#69F0AE"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarAccentHex, RelativeSource={RelativeSource AncestorType=Window}}" Value="#69F0AE">
+                                                                                <Setter TargetName="ring" Property="BorderBrush" Value="White"/>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                            </Button>
+                                                            <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FFD600" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                <Button.Template>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                            <Ellipse Fill="#FFD600"/>
+                                                                        </Border>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarAccentHex, RelativeSource={RelativeSource AncestorType=Window}}" Value="#FFD600">
+                                                                                <Setter TargetName="ring" Property="BorderBrush" Value="White"/>
+                                                                            </DataTrigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Button.Template>
+                                                            </Button>
+                                                        </StackPanel>
 
-                                                            <StackPanel VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis">
-                                                                    <TextBlock.Style>
-                                                                        <Style TargetType="TextBlock">
-                                                                            <Setter Property="Foreground" Value="White"/>
-                                                                            <Style.Triggers>
+                                                        <Button Command="{Binding SaveNewCalendarItemCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border x:Name="saveBd" CornerRadius="8" Padding="14,5" Background="#FF5E36">
+                                                                        <TextBlock Text="Save" Foreground="White" FontSize="11.5" FontWeight="Bold"/>
+                                                                    </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="saveBd" Property="Background" Value="#FF7048"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </ScrollViewer>
+
+                                        <!-- Day Schedule View (visible when composer is closed) -->
+                                        <Grid Grid.Row="1">
+                                            <Grid.Style>
+                                                <Style TargetType="Grid">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsAddingCalendarEvent}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Grid.Style>
+
+                                            <!-- Empty Day Agenda State -->
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Calendar.SelectedDayItems.Count}" Value="0">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="24" Foreground="#38FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                <TextBlock Text="No events or reminders" Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Tap + New to schedule on this day" Foreground="#48FFFFFF" FontSize="10.5" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                            </StackPanel>
+
+                                            <!-- Selected Day Events & Reminders List -->
+                                            <ListBox ItemsSource="{Binding Calendar.SelectedDayItems}"
+                                                     Background="Transparent" BorderThickness="0"
+                                                     ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#12FFFFFF" BorderBrush="#1EFFFFFF" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,2.5">
+                                                            <DockPanel LastChildFill="True">
+                                                                <Button Style="{StaticResource NotchIconBtn}"
+                                                                        Command="{Binding DataContext.RemoveCalendarItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        DockPanel.Dock="Right" Padding="4,2" ToolTip="Delete">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9.5" Foreground="#68FFFFFF"/>
+                                                                </Button>
+
+                                                                <!-- Samsung-style Circular Reminder Checkbox -->
+                                                                <Button Command="{Binding DataContext.ToggleCalendarItemCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"
+                                                                        DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                    <Button.Template>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border x:Name="chk" Width="18" Height="18" CornerRadius="9" BorderThickness="1.5" BorderBrush="{Binding AccentHex}" Background="Transparent">
+                                                                                <TextBlock x:Name="tick" FontFamily="Segoe Fluent Icons" Text="&#xE73E;" FontSize="9.5" Foreground="#101216" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
                                                                                 <DataTrigger Binding="{Binding IsCompleted}" Value="True">
-                                                                                    <Setter Property="Foreground" Value="#60FFFFFF"/>
-                                                                                    <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                                    <Setter TargetName="chk" Property="Background" Value="{Binding AccentHex}"/>
+                                                                                    <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Button.Template>
+                                                                </Button>
+
+                                                                <!-- Vertical Accent Pill Bar for Calendar Events -->
+                                                                <Border Width="3.5" Height="22" CornerRadius="1.75" Background="{Binding AccentHex}" Margin="0,0,8,0" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReminder}" Value="False">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
                                                                                 </DataTrigger>
                                                                             </Style.Triggers>
                                                                         </Style>
-                                                                    </TextBlock.Style>
-                                                                </TextBlock>
-                                                                <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
-                                                                    <TextBlock Text="{Binding DisplayTime}" Foreground="#8E9098" FontSize="10"/>
-                                                                    <TextBlock Text=" • Reminder" Foreground="{Binding AccentHex}" FontSize="10" FontWeight="SemiBold"
-                                                                               Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"/>
+                                                                    </Border.Style>
+                                                                </Border>
+
+                                                                <StackPanel VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Foreground" Value="White"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                                                        <Setter Property="Foreground" Value="#60FFFFFF"/>
+                                                                                        <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                                                        <TextBlock Text="{Binding DisplayTime}" Foreground="#8E9098" FontSize="10"/>
+                                                                        <TextBlock Text=" • Reminder" Foreground="{Binding AccentHex}" FontSize="10" FontWeight="SemiBold"
+                                                                                   Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"/>
+                                                                    </StackPanel>
                                                                 </StackPanel>
-                                                            </StackPanel>
-                                                        </DockPanel>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Grid>
                                     </Grid>
                                 </Border>
                             </Grid>
@@ -2295,12 +2413,12 @@
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
 
-                                <!-- TOP ROW: Compute (CPU + RAM + Disk) | Graphics Hero (GPU % + VRAM) -->
+                                <!-- TOP ROW: Compute (CPU + RAM + Disk) | Graphics Adapters (Per-GPU Name, Active State & Separate VRAM) -->
                                 <Grid Grid.Row="0" Margin="0,0,0,4">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="1.15*"/>
+                                        <ColumnDefinition Width="0.96*"/>
                                         <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1.28*"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Card A: Compute (CPU & RAM + Disk pill) -->
@@ -2311,15 +2429,10 @@
                                                 <RowDefinition Height="*"/>
                                             </Grid.RowDefinitions>
 
-                                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE950;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Compute &amp; Memory" Foreground="#9A9CA2" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                                <Border Style="{StaticResource MicroPillBadge}" DockPanel.Dock="Right" Padding="7,2">
-                                                    <TextBlock Text="{Binding DiskPercent, StringFormat='{}Disk {0}%'}" Foreground="#D8FFFFFF" FontSize="10" FontWeight="SemiBold"/>
-                                                </Border>
-                                            </DockPanel>
+                                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE950;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Compute &amp; Memory" Foreground="#9A9CA2" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            </StackPanel>
 
                                             <Grid Grid.Row="1">
                                                 <Grid.ColumnDefinitions>
@@ -2335,8 +2448,8 @@
                                                         <RowDefinition Height="*"/>
                                                     </Grid.RowDefinitions>
                                                     <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Bottom">
-                                                        <TextBlock Text="{Binding CpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="23" FontWeight="Bold"/>
-                                                        <TextBlock Text="CPU" Foreground="#8E9098" FontSize="11" FontWeight="SemiBold" Margin="7,0,0,4" VerticalAlignment="Bottom"/>
+                                                        <TextBlock Text="{Binding CpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                                        <TextBlock Text="CPU" Foreground="#8E9098" FontSize="10.5" FontWeight="SemiBold" Margin="6,0,0,3" VerticalAlignment="Bottom"/>
                                                     </StackPanel>
                                                     <Grid Grid.Row="1" Height="30" VerticalAlignment="Bottom" ClipToBounds="True">
                                                         <Polygon Points="{Binding CpuAreaPoints}" Stretch="Fill">
@@ -2359,8 +2472,8 @@
                                                     </Grid.RowDefinitions>
                                                     <StackPanel Grid.Row="0">
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
-                                                            <TextBlock Text="{Binding MemoryPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="23" FontWeight="Bold"/>
-                                                            <TextBlock Text="{Binding RamText}" Foreground="#8E9098" FontSize="10" FontWeight="SemiBold" Margin="7,0,0,4" VerticalAlignment="Bottom"/>
+                                                            <TextBlock Text="{Binding MemoryPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                                            <TextBlock Text="{Binding RamText}" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold" Margin="5,0,0,3" VerticalAlignment="Bottom"/>
                                                         </StackPanel>
                                                     </StackPanel>
                                                     <Grid Grid.Row="1" Height="30" VerticalAlignment="Bottom" ClipToBounds="True">
@@ -2379,84 +2492,144 @@
                                         </Grid>
                                     </Border>
 
-                                    <!-- Card B: Graphics (GPU Utilization % + VRAM Consumption) -->
+                                    <!-- Card B: Graphics Adapters (Shows Both GPUs with Name, Active Indicator & Separate VRAM) -->
                                     <Border Grid.Column="2" Style="{StaticResource BentoCard}" Padding="13,10">
                                         <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
+                                            <!-- Multi-GPU View (e.g. Discrete + Integrated GPU) -->
+                                            <Grid Visibility="{Binding HasMultipleGpus, Converter={StaticResource BoolToVis}}">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
 
-                                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7F4;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Graphics (GPU)" Foreground="#9A9CA2" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7F4;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Graphics Adapters" Foreground="#9A9CA2" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="Active Load &amp; VRAM" Foreground="#60FFFFFF" FontSize="9.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                </DockPanel>
+
+                                                <ItemsControl Grid.Row="1" ItemsSource="{Binding GpuAdapters}" VerticalAlignment="Center">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Background="#0EFFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="9" Padding="8,5" Margin="0,2">
+                                                                <Grid>
+                                                                    <Grid.RowDefinitions>
+                                                                        <RowDefinition Height="Auto"/>
+                                                                        <RowDefinition Height="Auto"/>
+                                                                    </Grid.RowDefinitions>
+
+                                                                    <DockPanel Grid.Row="0" LastChildFill="True">
+                                                                        <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}"
+                                                                                   Foreground="White" FontSize="13.5" FontWeight="Bold"
+                                                                                   DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                                        <Border DockPanel.Dock="Right" Margin="6,0,0,0" Padding="5,1" CornerRadius="5"
+                                                                                Background="#24FF5E36" BorderBrush="#60FF5E36" BorderThickness="0.8"
+                                                                                VerticalAlignment="Center"
+                                                                                Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}">
+                                                                            <TextBlock Text="IN USE" Foreground="#FF5E36" FontSize="8.5" FontWeight="Bold"/>
+                                                                        </Border>
+                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                            <Border Background="#1FFFFFFF" CornerRadius="4" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding RoleLabel}" FontSize="8.5" FontWeight="Bold" VerticalAlignment="Center">
+                                                                                    <TextBlock.Style>
+                                                                                        <Style TargetType="TextBlock">
+                                                                                            <Setter Property="Foreground" Value="#40C4FF"/>
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
+                                                                                                    <Setter Property="Foreground" Value="#69F0AE"/>
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </TextBlock.Style>
+                                                                                </TextBlock>
+                                                                            </Border>
+                                                                            <TextBlock Text="{Binding Name}" ToolTip="{Binding Name}"
+                                                                                       Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                                                                       MaxWidth="175" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                        </StackPanel>
+                                                                    </DockPanel>
+
+                                                                    <Grid Grid.Row="1" Margin="0,3,0,0">
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                            <ColumnDefinition Width="8"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="0" Text="{Binding VramText}" Foreground="#69F0AE" FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                                        <ProgressBar Grid.Column="2" Height="4" Background="#22252C" VerticalAlignment="Center"
+                                                                                     Value="{Binding GpuPercent, Mode=OneWay}" Maximum="100">
+                                                                            <ProgressBar.Style>
+                                                                                <Style TargetType="ProgressBar" BasedOn="{StaticResource MetricProgressBarStyle}">
+                                                                                    <Setter Property="Height" Value="4"/>
+                                                                                    <Setter Property="Foreground" Value="#40C4FF"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
+                                                                                            <Setter Property="Foreground" Value="#69F0AE"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </ProgressBar.Style>
+                                                                        </ProgressBar>
+                                                                    </Grid>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+
+                                            <!-- Single-GPU Hero View -->
+                                            <Grid Visibility="{Binding HasSingleGpu, Converter={StaticResource BoolToVis}}">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+
+                                                <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7F4;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding ActiveGpuName}" ToolTip="{Binding ActiveGpuName}" Foreground="#D8FFFFFF" FontSize="11.5" FontWeight="SemiBold"
+                                                                   MaxWidth="175" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <Border Style="{StaticResource MicroPillBadge}" DockPanel.Dock="Right" Padding="8,2" Background="#1E69F0AE" BorderBrush="#4069F0AE">
+                                                        <TextBlock Text="{Binding VramText}" Foreground="#69F0AE" FontSize="10.5" FontWeight="Bold"/>
+                                                    </Border>
+                                                </DockPanel>
+
+                                                <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="25" FontWeight="Bold"/>
+                                                    <TextBlock Text="3D / Compute Load" Foreground="#8E9098" FontSize="10.5" Margin="9,0,0,4" VerticalAlignment="Bottom"/>
                                                 </StackPanel>
-                                                <Border Style="{StaticResource MicroPillBadge}" DockPanel.Dock="Right" Padding="8,2" Background="#1E69F0AE" BorderBrush="#4069F0AE">
-                                                    <TextBlock Text="{Binding VramText}" Foreground="#69F0AE" FontSize="10.5" FontWeight="Bold"/>
-                                                </Border>
-                                            </DockPanel>
 
-                                            <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="25" FontWeight="Bold"/>
-                                                <TextBlock Text="3D / Compute Load" Foreground="#8E9098" FontSize="10.5" Margin="9,0,0,4" VerticalAlignment="Bottom"/>
-                                            </StackPanel>
-
-                                            <Grid Grid.Row="2" Height="30" VerticalAlignment="Bottom" ClipToBounds="True">
-                                                <Polygon Points="{Binding GpuAreaPoints}" Stretch="Fill">
-                                                    <Polygon.Fill>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                            <GradientStop Color="#4569F0AE" Offset="0"/>
-                                                            <GradientStop Color="#0069F0AE" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Polygon.Fill>
-                                                </Polygon>
-                                                <Polyline Points="{Binding GpuGraphPoints}" Stroke="#69F0AE" StrokeThickness="1.7" Stretch="Fill"/>
+                                                <Grid Grid.Row="2" Height="30" VerticalAlignment="Bottom" ClipToBounds="True">
+                                                    <Polygon Points="{Binding GpuAreaPoints}" Stretch="Fill">
+                                                        <Polygon.Fill>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                                <GradientStop Color="#4569F0AE" Offset="0"/>
+                                                                <GradientStop Color="#0069F0AE" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Polygon.Fill>
+                                                    </Polygon>
+                                                    <Polyline Points="{Binding GpuGraphPoints}" Stroke="#69F0AE" StrokeThickness="1.7" Stretch="Fill"/>
+                                                </Grid>
                                             </Grid>
                                         </Grid>
                                     </Border>
                                 </Grid>
 
-                                <!-- BOTTOM ROW: 3 Bento Cards (Battery | Network | Storage & Volume) -->
+                                <!-- BOTTOM ROW: 2 Bento Cards (Network | Storage & Volume) — Battery moved to bottom bar -->
                                 <Grid Grid.Row="1" Margin="0,4,0,0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="8"/>
                                         <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="8"/>
-                                        <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <!-- Card 3: Battery -->
-                                    <Border Grid.Column="0" Style="{StaticResource BentoCard}" Padding="12,9">
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/>
-                                                <RowDefinition Height="*"/>
-                                                <RowDefinition Height="Auto"/>
-                                            </Grid.RowDefinitions>
-
-                                            <DockPanel Grid.Row="0">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" FontSize="12" Foreground="#FF5E36" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Battery" Foreground="#9A9CA2" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                                <TextBlock Text="{Binding BatteryHealthText}" Foreground="#75FFFFFF" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </DockPanel>
-
-                                            <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding BatteryPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                                                <TextBlock Text="{Binding BatteryStatusText}" Foreground="#9A9CA2" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-
-                                            <ProgressBar Grid.Row="2" Style="{StaticResource MetricProgressBarStyle}"
-                                                         Value="{Binding BatteryPercent, Mode=OneWay}" Maximum="100"/>
-                                        </Grid>
-                                    </Border>
-
                                     <!-- Card 4: Network -->
-                                    <Border Grid.Column="2" Style="{StaticResource BentoCard}" Padding="12,9">
+                                    <Border Grid.Column="0" Style="{StaticResource BentoCard}" Padding="12,9">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto"/>
@@ -2512,7 +2685,7 @@
                                     </Border>
 
                                     <!-- Card 5: Storage & Volume Toggleable -->
-                                    <Border Grid.Column="4" Style="{StaticResource BentoCard}" Padding="12,9">
+                                    <Border Grid.Column="2" Style="{StaticResource BentoCard}" Padding="12,9">
                                         <Grid>
                                             <!-- Storage Mode -->
                                             <Grid>
@@ -2577,12 +2750,22 @@
                                                     </StackPanel>
                                                 </Border>
 
-                                                <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding SelectedDrive.UsedPercent, Mode=OneWay, StringFormat='{}{0}%'}"
-                                                               Foreground="White" FontSize="22" FontWeight="Bold"/>
-                                                    <TextBlock Text="{Binding SelectedDrive.SummaryText, Mode=OneWay}"
-                                                               Foreground="#9A9CA2" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
+                                                <DockPanel Grid.Row="1" VerticalAlignment="Center" LastChildFill="True">
+                                                    <Border Style="{StaticResource MicroPillBadge}"
+                                                            DockPanel.Dock="Right"
+                                                            VerticalAlignment="Top"
+                                                            Padding="7,2"
+                                                            Margin="8,2,0,0"
+                                                            ToolTip="Physical Disk Active Time">
+                                                        <TextBlock Text="{Binding DiskPercent, StringFormat='{}Disk {0}%'}" Foreground="#D8FFFFFF" FontSize="10" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SelectedDrive.UsedPercent, Mode=OneWay, StringFormat='{}{0}%'}"
+                                                                   Foreground="White" FontSize="22" FontWeight="Bold"/>
+                                                        <TextBlock Text="{Binding SelectedDrive.SummaryText, Mode=OneWay}"
+                                                                   Foreground="#9A9CA2" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DockPanel>
 
                                                 <ProgressBar Grid.Row="2" Style="{StaticResource MetricProgressBarStyle}"
                                                              Value="{Binding SelectedDrive.UsedPercent, Mode=OneWay}" Maximum="100"/>
@@ -2643,7 +2826,12 @@
                                                                         <DockPanel LastChildFill="True">
                                                                             <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#FF5E36" FontSize="10" Margin="5,0,0,0" DockPanel.Dock="Right"
                                                                                        Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
-                                                                            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+                                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="5,0,0,0"
+                                                                                        Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}">
+                                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                                                                                <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="10.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                                         </DockPanel>
                                                                     </Button>
                                                                 </DataTemplate>
@@ -2696,49 +2884,41 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Left Bento Deck: 2x2 Launchers + Stay Awake & Snips -->
+                                <!-- Left Bento Control Center: Brightness Slider + Utility Actions + Quick Launchers -->
                                 <Border Grid.Column="0" Style="{StaticResource BentoCard}" Padding="10">
                                     <Grid>
                                         <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="*"/>
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <UniformGrid Grid.Row="0" Columns="2" Rows="2" Margin="0,0,0,8">
-                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenTaskManagerCommand}" Margin="0,0,6,6">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE9D9;" FontSize="14" Foreground="#FF5E36" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Task Mgr" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenSnippingToolCommand}" Margin="0,0,0,6">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8C6;" FontSize="14" Foreground="#FF5E36" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Snipping" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenNotepadCommand}" Margin="0,0,6,0">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE70F;" FontSize="14" Foreground="#FF5E36" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Notepad" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenCalculatorCommand}" Margin="0">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8EF;" FontSize="14" Foreground="#FF5E36" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Calculator" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </UniformGrid>
+                                        <!-- Top Display Brightness Control Card -->
+                                        <Border Grid.Row="0" Background="#12FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Padding="9,7" Margin="0,0,0,8">
+                                            <DockPanel LastChildFill="True">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE706;" FontSize="13" Foreground="#FFD54F" DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding DisplayBrightness, StringFormat='{}{0}%'}" Foreground="White" FontSize="11.5" FontWeight="Bold" DockPanel.Dock="Right" Width="34" TextAlignment="Right" VerticalAlignment="Center"/>
+                                                <Slider Style="{StaticResource FluentVolumeSlider}"
+                                                        Value="{Binding DisplayBrightness, Mode=TwoWay}"
+                                                        IsEnabled="{Binding IsBrightnessSupported}"
+                                                        Minimum="0" Maximum="100"
+                                                        VerticalAlignment="Center"
+                                                        Margin="2,0,4,0"/>
+                                            </DockPanel>
+                                        </Border>
 
-                                        <Grid Grid.Row="1">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="6"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
+                                        <!-- Middle 2x2 Smart Action Tiles -->
+                                        <UniformGrid Grid.Row="1" Columns="2" Rows="2" Margin="0,0,0,8">
+                                            <!-- Eyedropper Color Picker -->
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding PickScreenColorCommand}" Margin="0,0,6,6" ToolTip="Sample any screen pixel &amp; copy #RRGGBB">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEF3C;" FontSize="13.5" Foreground="#00E5FF" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Color Pick" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
 
-                                            <Button Grid.Column="0" Command="{Binding ToggleStayAwakeCommand}" Padding="10,9">
+                                            <!-- Stay Awake Toggle -->
+                                            <Button Command="{Binding ToggleStayAwakeCommand}" Margin="0,0,0,6">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource BentoTileBtn}">
                                                         <Style.Triggers>
@@ -2749,8 +2929,8 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Button.Style>
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7E8;" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7E8;" FontSize="13.5" Margin="0,0,7,0" VerticalAlignment="Center">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Foreground" Value="#8E9098"/>
@@ -2765,11 +2945,11 @@
                                                     <TextBlock FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
-                                                                <Setter Property="Text" Value="Stay Awake: Off"/>
+                                                                <Setter Property="Text" Value="Awake Off"/>
                                                                 <Setter Property="Foreground" Value="#D0FFFFFF"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsStayAwakeEnabled}" Value="True">
-                                                                        <Setter Property="Text" Value="Stay Awake: On"/>
+                                                                        <Setter Property="Text" Value="Awake On"/>
                                                                         <Setter Property="Foreground" Value="White"/>
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
@@ -2779,14 +2959,38 @@
                                                 </StackPanel>
                                             </Button>
 
-                                            <Button Grid.Column="2" Style="{StaticResource BentoTileBtn}" Command="{Binding OpenScreenshotsFolderCommand}"
-                                                    Padding="12,9" ToolTip="Open Saved Snips Folder">
+                                            <!-- Saved Snips Folder -->
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenScreenshotsFolderCommand}" Margin="0,0,6,0" ToolTip="Open Saved Snips Folder">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" FontSize="13" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" FontSize="13.5" Foreground="#69F0AE" Margin="0,0,7,0" VerticalAlignment="Center"/>
                                                     <TextBlock Text="Snips" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
-                                        </Grid>
+
+                                            <!-- Lock PC -->
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding LockWorkstationCommand}" Margin="0" ToolTip="Lock Screen (Win + L)">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72E;" FontSize="13.5" Foreground="#FF5E36" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Lock PC" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </UniformGrid>
+
+                                        <!-- Bottom Compact Quick Launch Strip -->
+                                        <UniformGrid Grid.Row="2" Columns="4">
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenTaskManagerCommand}" Padding="6,7" Margin="0,0,4,0" ToolTip="Task Manager">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE9D9;" FontSize="13.5" Foreground="#D8FFFFFF" HorizontalAlignment="Center"/>
+                                            </Button>
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenTerminalCommand}" Padding="6,7" Margin="0,0,4,0" ToolTip="Windows Terminal">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE756;" FontSize="13.5" Foreground="#D8FFFFFF" HorizontalAlignment="Center"/>
+                                            </Button>
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenBluetoothSettingsCommand}" Padding="6,7" Margin="0,0,4,0" ToolTip="Bluetooth &amp; Devices">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE702;" FontSize="13.5" Foreground="#40C4FF" HorizontalAlignment="Center"/>
+                                            </Button>
+                                            <Button Style="{StaticResource BentoTileBtn}" Command="{Binding OpenCalculatorCommand}" Padding="6,7" Margin="0" ToolTip="Calculator">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8EF;" FontSize="13.5" Foreground="#D8FFFFFF" HorizontalAlignment="Center"/>
+                                            </Button>
+                                        </UniformGrid>
                                     </Grid>
                                 </Border>
 
@@ -2841,6 +3045,280 @@
                                         </Border>
                                     </Grid>
                                 </Border>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 7: FILE SHARE (GOOGLE QUICK SHARE INTEGRATION) -->
+                        <TabItem Style="{StaticResource FluentSegmentedTabItem}">
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Share" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TabItem.Header>
+
+                            <Grid Margin="2,2,2,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.15*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="0.85*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Left Column: Send Queue + Drop Zone + CTA -->
+                                <Border Grid.Column="0" Style="{StaticResource BentoCard}" Padding="11,9">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Header + Action Pills -->
+                                        <DockPanel Grid.Row="0" Margin="0,0,0,7">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Send Queue" Foreground="White" FontSize="12.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <Border Background="#20FFFFFF" CornerRadius="7" Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ShareQueue.Count}" Foreground="#E0FFFFFF" FontSize="10" FontWeight="Bold"/>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding BrowseShareFilesCommand}" Background="#16FFFFFF" Padding="6,3" ToolTip="Browse Files">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE710;" FontSize="9.5" Foreground="#FF5E36" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Files" FontSize="10" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding PullDockToShareCommand}" Background="#14FFFFFF" Padding="6,3" Margin="4,0,0,0" ToolTip="Import Staged Dock Files">
+                                                    <TextBlock Text="Dock" FontSize="10" FontWeight="SemiBold" Foreground="#D8FFFFFF"/>
+                                                </Button>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding AddClipboardToShareCommand}" Background="#14FFFFFF" Padding="6,3" Margin="4,0,0,0" ToolTip="Share Latest Clipboard Text/Image">
+                                                    <TextBlock Text="Clip" FontSize="10" FontWeight="SemiBold" Foreground="#D8FFFFFF"/>
+                                                </Button>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShareQueueCommand}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Clear Queue">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE74D;" FontSize="10" Foreground="#A0FFFFFF"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </DockPanel>
+
+                                        <!-- Empty Drop State -->
+                                        <Border Grid.Row="1" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="10" Background="#0AFFFFFF" Padding="10">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasShareQueueItems}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE898;" FontSize="24" Foreground="#48FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                <TextBlock Text="Drop files or folders to share" Foreground="#90FFFFFF" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Or pick Files / pull from Dock / share Clipboard" Foreground="#58FFFFFF" FontSize="10" TextAlignment="Center" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Queued Items List -->
+                                        <ListBox Grid.Row="1" ItemsSource="{Binding ShareQueue}"
+                                                 Visibility="{Binding HasShareQueueItems, Converter={StaticResource BoolToVis}}"
+                                                 Background="Transparent" BorderThickness="0"
+                                                 ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="#12FFFFFF" BorderBrush="#1EFFFFFF" BorderThickness="1" CornerRadius="9" Padding="7,5" Margin="0,2">
+                                                        <DockPanel LastChildFill="True">
+                                                            <Button Style="{StaticResource NotchIconBtn}"
+                                                                    Command="{Binding DataContext.RemoveShareItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    DockPanel.Dock="Right" Padding="4,2" ToolTip="Remove from queue">
+                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9.5" Foreground="#75FFFFFF"/>
+                                                            </Button>
+                                                            <TextBlock Text="{Binding FormattedSize}" DockPanel.Dock="Right"
+                                                                       Foreground="#75FFFFFF" FontSize="10" Margin="6,0" VerticalAlignment="Center"/>
+                                                            <Border Width="22" Height="22" CornerRadius="5" Background="#18FFFFFF" Margin="0,0,8,0" ClipToBounds="True" VerticalAlignment="Center">
+                                                                <Grid>
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8A5;" FontSize="10" Foreground="#80FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                                </Grid>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding FileName}" Foreground="White" FontSize="11.5" FontWeight="SemiBold"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        </DockPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+
+                                        <!-- Status feedback -->
+                                        <TextBlock Grid.Row="2" Text="{Binding ShareActionFeedback}" Foreground="#989BA4" FontSize="10"
+                                                   Margin="2,5,2,4" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ShareActionFeedback}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+
+                                        <!-- Hero Send Button -->
+                                        <Button Grid.Row="3" Command="{Binding SendWithQuickShareCommand}"
+                                                IsEnabled="{Binding HasShareQueueItems}"
+                                                Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,6,0,0">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="btnBd" Background="#FF5E36" CornerRadius="10" Padding="12,8">
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" Foreground="White" FontSize="12.5" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding ShareQueueSummaryText}" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="btnBd" Property="Background" Value="#FF7048"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter TargetName="btnBd" Property="Background" Value="#24FFFFFF"/>
+                                                            <Setter Property="Opacity" Value="0.55"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Right Column: Google Quick Share Engine Status + Recent Transfers -->
+                                <Grid Grid.Column="2">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="8"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Quick Share Hub Status & Controls -->
+                                    <Border Grid.Row="0" Style="{StaticResource BentoCard}" Padding="11,9">
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,6">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Ellipse Width="7" Height="7" Margin="0,0,7,0" VerticalAlignment="Center">
+                                                        <Ellipse.Style>
+                                                            <Style TargetType="Ellipse">
+                                                                <Setter Property="Fill" Value="#FFB300"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsQuickShareInstalled}" Value="True">
+                                                                        <Setter Property="Fill" Value="#69F0AE"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Ellipse.Style>
+                                                    </Ellipse>
+                                                    <TextBlock Text="Google Quick Share" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <TextBlock Text="{Binding QuickShareStatusText}" Foreground="#989BA4" FontSize="10.5"
+                                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="6"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <Button Grid.Column="0" Style="{StaticResource BentoTileBtn}" Command="{Binding OpenQuickShareAppCommand}" Padding="9,6"
+                                                        ToolTip="Open Google Quick Share (Receive / Visibility)">
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE896;" FontSize="11.5" Foreground="#69F0AE" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Receive / Open App" Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+
+                                                <Button Grid.Column="2" Style="{StaticResource BentoTileBtn}" Command="{Binding OpenDownloadsFolderCommand}" Padding="9,6"
+                                                        ToolTip="Open Downloads Folder">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" FontSize="12" Foreground="#FF5E36"/>
+                                                </Button>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Recent Shares History -->
+                                    <Border Grid.Row="2" Style="{StaticResource BentoCard}" Padding="11,9">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                                <TextBlock Text="RECENT SHARES" Foreground="#75FFFFFF" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShareHistoryCommand}"
+                                                        DockPanel.Dock="Right" Padding="4,2" ToolTip="Clear Share History"
+                                                        Visibility="{Binding HasShareHistory, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE74D;" FontSize="10" Foreground="#80FFFFFF"/>
+                                                </Button>
+                                            </DockPanel>
+
+                                            <TextBlock Grid.Row="1" Text="Sent files appear here for one-click resend."
+                                                       Foreground="#55FFFFFF" FontSize="10.5" TextWrapping="Wrap"
+                                                       VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasShareHistory}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <ListBox Grid.Row="1" ItemsSource="{Binding ShareHistory}"
+                                                     Visibility="{Binding HasShareHistory, Converter={StaticResource BoolToVis}}"
+                                                     Background="Transparent" BorderThickness="0"
+                                                     ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#10FFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="8" Padding="7,5" Margin="0,2">
+                                                            <DockPanel LastChildFill="True">
+                                                                <Button Style="{StaticResource NotchIconBtn}"
+                                                                        Command="{Binding DataContext.ResendHistoryEntryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        DockPanel.Dock="Right" Padding="5,3" ToolTip="Resend via Quick Share">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72C;" FontSize="10.5" Foreground="#FF5E36"/>
+                                                                </Button>
+                                                                <StackPanel>
+                                                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="11" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                                    <TextBlock Foreground="#78FFFFFF" FontSize="9.5" TextTrimming="CharacterEllipsis">
+                                                                        <TextBlock.Text>
+                                                                            <MultiBinding StringFormat="{}{0} • {1}">
+                                                                                <Binding Path="SummaryText"/>
+                                                                                <Binding Path="TimestampText"/>
+                                                                            </MultiBinding>
+                                                                        </TextBlock.Text>
+                                                                    </TextBlock>
+                                                                </StackPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
                             </Grid>
                         </TabItem>
                     </TabControl>
@@ -2899,6 +3377,45 @@
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <!-- System Battery Micro-Pill (moved from Resources tab, beside Settings) -->
+                                <Border Style="{StaticResource MicroPillBadge}" Padding="7,3" Margin="0,0,6,0"
+                                        ToolTip="{Binding BatteryTooltip}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="&#xEBA0;"/>
+                                                    <Setter Property="Foreground" Value="#D8FFFFFF"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCharging}" Value="True">
+                                                            <Setter Property="Text" Value="&#xE945;"/>
+                                                            <Setter Property="Foreground" Value="#69F0AE"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsBatteryLow}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FF5E36"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding BatteryPercent, StringFormat='{}{0}%'}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#E8EAEE"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCharging}" Value="True">
+                                                            <Setter Property="Foreground" Value="#69F0AE"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsBatteryLow}" Value="True">
+                                                            <Setter Property="Foreground" Value="#FF5E36"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
                                 <Button Style="{StaticResource NotchIconBtn}" Command="{Binding CaptureScreenCommand}" ToolTip="Screen Snip to Shelf" Padding="7,4">
                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE722;" FontSize="13.5" Foreground="#D8FFFFFF"/>
                                 </Button>
@@ -2919,7 +3436,7 @@
                     <Border Visibility="{Binding IsBottomAudioMenuOpen, Converter={StaticResource BoolToVis}}"
                             Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="12"
                             Padding="6" Panel.ZIndex="200" VerticalAlignment="Bottom" HorizontalAlignment="Left"
-                            Margin="10,0,0,46" MinWidth="255" MaxHeight="160">
+                            Margin="10,0,0,46" MinWidth="275" MaxHeight="160">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
                                 <TextBlock Text="SELECT PLAYBACK DEVICE" Foreground="#65FFFFFF" FontSize="9.5" FontWeight="Bold" Margin="6,2,4,4"/>
@@ -2934,7 +3451,12 @@
                                                 <DockPanel LastChildFill="True">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#FF5E36" FontSize="11" Margin="8,0,0,0" DockPanel.Dock="Right"
                                                                Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
-                                                    <TextBlock Text="{Binding Name}" Foreground="White" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="8,0,0,0"
+                                                                Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="9.5" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Foreground="White" FontSize="11.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                 </DockPanel>
                                             </Button>
                                         </DataTemplate>
@@ -2942,6 +3464,88 @@
                                 </ItemsControl>
                             </StackPanel>
                         </ScrollViewer>
+                    </Border>
+
+                    <!-- Smart Split Drag-and-Drop Overlay (Stage to Dock vs Send via Quick Share) -->
+                    <Border Grid.Row="0" Grid.RowSpan="2"
+                            Panel.ZIndex="300"
+                            Visibility="{Binding IsFileDragOverlayVisible, Converter={StaticResource BoolToVis}}"
+                            Background="#EE16181D"
+                            BorderBrush="#34FFFFFF"
+                            BorderThickness="1"
+                            CornerRadius="16"
+                            Padding="14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left Drop Zone: Stage in Shelf Dock -->
+                            <Border x:Name="DockDropTarget"
+                                    Grid.Column="0"
+                                    AllowDrop="True"
+                                    DragEnter="OnDockDropTargetDragOver"
+                                    DragOver="OnDockDropTargetDragOver"
+                                    DragLeave="OnDockDropTargetDragLeave"
+                                    Drop="OnDockDropTargetDrop"
+                                    CornerRadius="14"
+                                    BorderThickness="1.5"
+                                    Padding="18">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#14FFFFFF"/>
+                                        <Setter Property="BorderBrush" Value="#2CFFFFFF"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDropDockHovered}" Value="True">
+                                                <Setter Property="Background" Value="#2640C4FF"/>
+                                                <Setter Property="BorderBrush" Value="#9040C4FF"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <Border Width="52" Height="52" CornerRadius="16" Background="#2040C4FF" BorderBrush="#4040C4FF" BorderThickness="1" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" FontSize="22" Foreground="#40C4FF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Stage in Dock" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Hold files on the Shelf Dock for quick access &amp; drag-out" Foreground="#88FFFFFF" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="8,5,8,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Right Drop Zone: Instant Google Quick Share -->
+                            <Border x:Name="ShareDropTarget"
+                                    Grid.Column="2"
+                                    AllowDrop="True"
+                                    DragEnter="OnShareDropTargetDragOver"
+                                    DragOver="OnShareDropTargetDragOver"
+                                    DragLeave="OnShareDropTargetDragLeave"
+                                    Drop="OnShareDropTargetDrop"
+                                    CornerRadius="14"
+                                    BorderThickness="1.5"
+                                    Padding="18">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#16FF5E36"/>
+                                        <Setter Property="BorderBrush" Value="#40FF5E36"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDropShareHovered}" Value="True">
+                                                <Setter Property="Background" Value="#34FF5E36"/>
+                                                <Setter Property="BorderBrush" Value="#CCFF5E36"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <Border Width="52" Height="52" CornerRadius="16" Background="#28FF5E36" BorderBrush="#55FF5E36" BorderThickness="1" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="22" Foreground="#FF5E36" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Send with Quick Share" Foreground="White" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Drop here to immediately send via Google Quick Share" Foreground="#98FFFFFF" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="8,5,8,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </Border>
 
                 </Grid>

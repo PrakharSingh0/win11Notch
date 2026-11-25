@@ -56,6 +56,7 @@ public sealed partial class CalendarService : ObservableObject
     public ObservableCollection<CalendarItem>    SelectedDayItems { get; } = new();
 
     public event Action<CalendarItem>? ReminderDue;
+    public event Action?               CalendarChanged;
 
     public CalendarService()
     {
@@ -125,6 +126,7 @@ public sealed partial class CalendarService : ObservableObject
         Save();
         RebuildMonthGrid();
         RefreshSelectedDayItems();
+        CalendarChanged?.Invoke();
     }
 
     public void ToggleComplete(CalendarItem item)
@@ -132,6 +134,7 @@ public sealed partial class CalendarService : ObservableObject
         item.IsCompleted = !item.IsCompleted;
         Save();
         RefreshSelectedDayItems();
+        CalendarChanged?.Invoke();
     }
 
     public void RemoveItem(CalendarItem item)
@@ -141,6 +144,7 @@ public sealed partial class CalendarService : ObservableObject
             Save();
             RebuildMonthGrid();
             RefreshSelectedDayItems();
+            CalendarChanged?.Invoke();
         }
     }
 
@@ -156,6 +160,20 @@ public sealed partial class CalendarService : ObservableObject
                 ReminderDue?.Invoke(item);
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the next uncompleted reminder or timed event due later today for quick glance display.
+    /// </summary>
+    public CalendarItem? GetNextTodayReminder(DateTime now)
+    {
+        string hhmm = now.ToString("HH:mm");
+        return _allItems
+            .Where(i => !i.IsCompleted && i.Date.Date == now.Date &&
+                        (i.IsAllDay || string.CompareOrdinal(i.TimeText, hhmm) >= 0))
+            .OrderBy(i => i.IsAllDay ? 1 : 0)
+            .ThenBy(i => i.TimeText, StringComparer.Ordinal)
+            .FirstOrDefault();
     }
 
     private void RebuildMonthGrid()

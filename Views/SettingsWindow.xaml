@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Win11Notch Settings"
+        Icon="pack://application:,,,/Assets/app.ico"
         Width="680" Height="520"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -149,53 +150,92 @@
 
         <!-- Modern Dark Acrylic ComboBox -->
         <Style TargetType="ComboBox">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#20FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+            <Setter Property="Background" Value="#1CFFFFFF"/>
+            <Setter Property="BorderBrush" Value="#2EFFFFFF"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Padding" Value="11,0,28,0"/>
+            <Setter Property="MinHeight" Value="34"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
-                        <Grid>
+                        <Grid MinHeight="{TemplateBinding MinHeight}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <ToggleButton x:Name="ToggleButton"
+                                          Style="{x:Null}"
+                                          OverridesDefaultStyle="True"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch"
                                           Focusable="False"
-                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                          ClickMode="Press">
+                                          ClickMode="Press"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          Cursor="Hand"
+                                          FocusVisualStyle="{x:Null}"
+                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
-                                        <Border x:Name="bd" Background="#1CFFFFFF" BorderBrush="#2CFFFFFF" BorderThickness="1" CornerRadius="9" Padding="10,5">
-                                            <DockPanel LastChildFill="True">
-                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE70D;" DockPanel.Dock="Right" Foreground="#90FFFFFF" FontSize="9.5" VerticalAlignment="Center" Margin="6,1,0,0"/>
-                                                <ContentPresenter/>
-                                            </DockPanel>
+                                        <Border x:Name="bd"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Stretch"
+                                                Background="#1CFFFFFF"
+                                                BorderBrush="#2EFFFFFF"
+                                                BorderThickness="1"
+                                                CornerRadius="9"
+                                                SnapsToDevicePixels="True">
+                                            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                <TextBlock x:Name="Chevron"
+                                                           FontFamily="Segoe Fluent Icons"
+                                                           Text="&#xE70D;"
+                                                           Foreground="#B8FFFFFF"
+                                                           FontSize="9.5"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0,1,11,0"/>
+                                            </Grid>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="bd" Property="Background" Value="#28FFFFFF"/>
+                                                <Setter TargetName="bd" Property="Background" Value="#26FFFFFF"/>
                                                 <Setter TargetName="bd" Property="BorderBrush" Value="#48FFFFFF"/>
+                                                <Setter TargetName="Chevron" Property="Foreground" Value="White"/>
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="bd" Property="Background" Value="#28FFFFFF"/>
+                                                <Setter TargetName="bd" Property="BorderBrush" Value="#80FF5E36"/>
+                                                <Setter TargetName="Chevron" Property="Foreground" Value="#FF5E36"/>
+                                                <Setter TargetName="Chevron" Property="Text" Value="&#xE70E;"/>
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
-                            <ContentPresenter Name="ContentSite"
+
+                            <ContentPresenter x:Name="ContentSite"
                                               IsHitTestVisible="False"
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                               ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
-                                              VerticalAlignment="Center"
-                                              HorizontalAlignment="Left"
-                                              Margin="11,0,26,0"/>
-                            <Popup Name="Popup"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              TextElement.FontSize="{TemplateBinding FontSize}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}"/>
+
+                            <Popup x:Name="Popup"
                                    Placement="Bottom"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True"
                                    Focusable="False"
                                    PopupAnimation="Slide">
-                                <Grid Name="DropDown"
+                                <Grid x:Name="DropDown"
                                       SnapsToDevicePixels="True"
                                       MinWidth="{TemplateBinding ActualWidth}"
                                       MaxHeight="{TemplateBinding MaxDropDownHeight}">
@@ -219,6 +259,7 @@
         </Style>
 
         <Style TargetType="ComboBoxItem">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="8,5"/>
@@ -356,7 +397,7 @@
                             </Border>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Win11Notch" Foreground="White" FontSize="14.5" FontWeight="Bold"/>
-                                <TextBlock Text="Control Center" Foreground="#75FFFFFF" FontSize="10.5"/>
+                                <TextBlock Text="{Binding SidebarGreetingText}" Foreground="#98FFFFFF" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                     </StackPanel>
@@ -450,6 +491,12 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE713;" FontSize="13" Foreground="#FF5E36" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="System &amp; Keys" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ListBoxItem>
+                            <ListBoxItem>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE946;" FontSize="13" Foreground="#FF5E36" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="About &amp; License" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ListBoxItem>
                         </ListBox>
@@ -577,7 +624,7 @@
                                         <DockPanel Margin="0,8,0,10">
                                             <TextBlock Text="Idle Opacity" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
                                             <TextBlock Text="{Binding IdleOpacityPercent, StringFormat='{}{0}%'}" Foreground="#FF5E36" FontWeight="Bold" FontSize="12" DockPanel.Dock="Right" VerticalAlignment="Center"/>
-                                            <Slider Value="{Binding IdleOpacityPercent}" Minimum="10" Maximum="50" Margin="14,0" VerticalAlignment="Center"/>
+                                            <Slider Value="{Binding IdleOpacityPercent}" Minimum="10" Maximum="100" Margin="14,0" VerticalAlignment="Center"/>
                                         </DockPanel>
 
                                         <TextBlock Text="Handle Tint Preset" Foreground="White" FontSize="12" Margin="0,2,0,8"/>
@@ -685,7 +732,10 @@
                                                   IsChecked="{Binding LaunchAtStartup}" Margin="0,12,0,12"/>
 
                                         <CheckBox Content="Dynamic Island toast banner on song changes"
-                                                  IsChecked="{Binding ShowMediaIslandNotifications}" Margin="0,0,0,14"/>
+                                                  IsChecked="{Binding ShowMediaIslandNotifications}" Margin="0,0,0,12"/>
+
+                                        <CheckBox Content="Show time-aware Dynamic Island greeting on startup"
+                                                  IsChecked="{Binding ShowStartupGreeting}" Margin="0,0,0,14"/>
 
                                         <DockPanel>
                                             <TextBlock Text="Global Toggle Hotkey" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
@@ -700,6 +750,144 @@
                                                 <ComboBoxItem Content="Ctrl + ~" Tag="Ctrl+~"/>
                                             </ComboBox>
                                         </DockPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <!-- PAGE 4: ABOUT & LICENSE -->
+                    <TabItem>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="0,0,6,0">
+                                <!-- Hero Identity Card -->
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Border Grid.Column="0" Width="56" Height="56" CornerRadius="14"
+                                                Background="#18FFFFFF" BorderBrush="#2CFFFFFF" BorderThickness="1"
+                                                Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <Image Source="pack://application:,,,/Assets/app.ico"
+                                                   Width="44" Height="44"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="Win11Notch" Foreground="White" FontSize="17" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                <Border Background="#28FF5E36" BorderBrush="#60FF5E36" BorderThickness="1" CornerRadius="6" Padding="7,2" Margin="9,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding AppVersionText}" Foreground="#FFFF8A65" FontSize="10.5" FontWeight="Bold"/>
+                                                </Border>
+                                                <Border Background="#2034D399" BorderBrush="#5034D399" BorderThickness="1" CornerRadius="6" Padding="7,2" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding LicenseTitle}" Foreground="#FF6EE7B7" FontSize="10.5" FontWeight="SemiBold"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="Dynamic Island Overlay &amp; Productivity Hub for Windows 11"
+                                                       Foreground="#B0B4BC" FontSize="11.5" Margin="0,4,0,2"/>
+                                            <TextBlock Foreground="#78808C" FontSize="10.5">
+                                                <Run Text="{Binding RuntimeInfoText, Mode=OneWay}"/>
+                                                <Run Text="  •  RAM: "/>
+                                                <Run Text="{Binding CurrentMemoryText, Mode=OneWay}" Foreground="#FF8A65"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Author & GitHub Repository Card -->
+                                <Border Style="{StaticResource SettingsCard}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource HeaderLabel}" Text="Author &amp; Source Code"/>
+                                        <TextBlock Style="{StaticResource SubLabel}" Text="Open-source software created and maintained independently."/>
+
+                                        <Grid Margin="0,12,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="10"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE77B;" Foreground="#FF5E36" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Author" Foreground="#9A9EA6" FontSize="12" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding AuthorName}" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                           Foreground="White" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            </DockPanel>
+
+                                            <DockPanel Grid.Row="2">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE774;" Foreground="#FF5E36" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="GitHub Repository" Foreground="#9A9EA6" FontSize="12" VerticalAlignment="Center"/>
+                                                </StackPanel>
+
+                                                <Button Command="{Binding OpenGitHubCommand}" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                        Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="{Binding GitHubRepoUrl}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="ghBd" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="8" Padding="10,5">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock x:Name="ghTxt" Text="{Binding GitHubRepoDisplay}" Foreground="#FF8A65" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8A7;" Foreground="#C0FFFFFF" FontSize="10.5" Margin="7,0,0,0" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="ghBd" Property="Background" Value="#28FF5E36"/>
+                                                                    <Setter TargetName="ghBd" Property="BorderBrush" Value="#70FF5E36"/>
+                                                                    <Setter TargetName="ghTxt" Property="Foreground" Value="White"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </DockPanel>
+                                        </Grid>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                            <Button Command="{Binding OpenAppDataFolderCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,8,0">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="bd" Background="#16FFFFFF" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="8" Padding="10,6">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" FontSize="11" Foreground="#D0FFFFFF" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="Open Config &amp; Logs" Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="bd" Property="Background" Value="#28FFFFFF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- License & Open-Source Attribution Card -->
+                                <Border Style="{StaticResource SettingsCard}" Margin="0">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock Style="{StaticResource HeaderLabel}" Text="Licensing &amp; Terms"/>
+                                            <TextBlock Text="Copyright © 2026 Prakhar Singh" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                                                       Foreground="#9096A0" FontSize="11" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <TextBlock Style="{StaticResource SubLabel}" Text="Distributed under the permissive MIT License."/>
+
+                                        <Border Background="#18000000" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,10,0,8">
+                                            <TextBlock Foreground="#B8BCC4" FontSize="10.5" TextWrapping="Wrap" LineHeight="15.5">
+                                                Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, subject to the MIT copyright and permission notice. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+                                            </TextBlock>
+                                        </Border>
+
+                                        <TextBlock Text="Built with open-source components: WPF-UI 4.3.0 (MIT), CommunityToolkit.Mvvm (MIT), Microsoft.Windows.CsWin32 (MIT)."
+                                                   Foreground="#78808C" FontSize="10.5" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

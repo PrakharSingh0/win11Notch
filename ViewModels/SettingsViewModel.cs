@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Win11Notch.Core.Settings;
@@ -28,6 +30,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool   _launchAtStartup;
     [ObservableProperty] private bool   _autoExpandOnDrag             = true;
     [ObservableProperty] private bool   _showMediaIslandNotifications = true;
+    [ObservableProperty] private bool   _showStartupGreeting          = true;
     [ObservableProperty] private string _hotkeyPreset                 = "Alt+Space";
     [ObservableProperty] private int    _targetMonitorIndex           = 0;
     [ObservableProperty] private int    _handleWidth                  = 72;
@@ -36,6 +39,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _borderAnimationPreset        = "None";
     [ObservableProperty] private bool   _dynamicContentSizing         = true;
     [ObservableProperty] private string _currentMemoryText            = "35.0 MB";
+    [ObservableProperty] private string _sidebarGreetingText          = "Control Center";
 
     // Productivity & Timer Settings
     [ObservableProperty] private int    _defaultFocusMinutes          = 25;
@@ -43,6 +47,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int    _dailyWaterTargetCups         = 8;
     [ObservableProperty] private bool   _timerSoundChimesEnabled      = true;
     [ObservableProperty] private bool   _dualActivityEnabled          = true;
+
+    public string AppVersionText    { get; }
+    public string AuthorName        => "Prakhar Singh";
+    public string GitHubRepoDisplay => "PrakharSingh0/win11Notch";
+    public string GitHubRepoUrl     => "https://github.com/PrakharSingh0/win11Notch";
+    public string LicenseTitle      => "MIT License";
+    public string RuntimeInfoText   => $".NET {Environment.Version.Major} WPF • Per-Monitor V2 DPI • Windows 11";
 
     public ObservableCollection<MonitorItem> Monitors { get; } = new();
 
@@ -53,6 +64,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         _settingsService = settingsService;
         _startupService  = startupService;
 
+        var ver = Assembly.GetExecutingAssembly().GetName().Version;
+        AppVersionText = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "v1.0.0";
+
         LoadFromSettings();
     }
 
@@ -60,6 +74,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         long bytes = Process.GetCurrentProcess().WorkingSet64;
         CurrentMemoryText = $"{bytes / (1024.0 * 1024.0):F1} MB";
+        SidebarGreetingText = GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle;
     }
 
     private void LoadFromSettings()
@@ -69,12 +84,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             var s = _settingsService.Current;
             DockEdge                     = s.DockEdge;
-            IdleOpacityPercent           = (int)Math.Round(s.IdleOpacity * 100);
+            IdleOpacityPercent           = Math.Clamp((int)Math.Round(s.IdleOpacity * 100), 10, 100);
             AcrylicTintPercent           = (int)Math.Round(s.AcrylicTintOpacity * 100);
             HoverDwellMs                 = s.HoverDwellMs;
             ExitGraceMs                  = s.ExitGraceMs;
             AutoExpandOnDrag             = s.AutoExpandOnDrag;
             ShowMediaIslandNotifications = s.ShowMediaIslandNotifications;
+            ShowStartupGreeting          = s.ShowStartupGreeting;
             HotkeyPreset                 = s.HotkeyPreset;
             TargetMonitorIndex           = s.TargetMonitorIndex;
             HandleWidth                  = s.HandleWidth;
@@ -94,6 +110,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             {
                 Monitors.Add(m);
             }
+
+            // Ensure TargetMonitorIndex maps to a real monitor Index (MonitorItem.Index is 1-based)
+            if (TargetMonitorIndex <= 0 || !Monitors.Any(m => m.Index == TargetMonitorIndex))
+            {
+                TargetMonitorIndex = Monitors.FirstOrDefault(m => m.IsPrimary)?.Index
+                                     ?? Monitors.FirstOrDefault()?.Index
+                                     ?? 1;
+            }
         }
         finally
         {
@@ -110,6 +134,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnExitGraceMsChanged(int value)                      => ApplyAndSave();
     partial void OnAutoExpandOnDragChanged(bool value)                => ApplyAndSave();
     partial void OnShowMediaIslandNotificationsChanged(bool value)        => ApplyAndSave();
+    partial void OnShowStartupGreetingChanged(bool value)                 => ApplyAndSave();
     partial void OnHotkeyPresetChanged(string value)                 => ApplyAndSave();
     partial void OnTargetMonitorIndexChanged(int value)               => ApplyAndSave();
     partial void OnHandleWidthChanged(int value)                     => ApplyAndSave();
@@ -139,12 +164,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         var s = _settingsService.Current;
         s.DockEdge                     = DockEdge;
-        s.IdleOpacity                  = IdleOpacityPercent / 100.0;
+        s.IdleOpacity                  = Math.Clamp(IdleOpacityPercent, 10, 100) / 100.0;
         s.AcrylicTintOpacity           = AcrylicTintPercent / 100.0;
         s.HoverDwellMs                 = HoverDwellMs;
         s.ExitGraceMs                  = ExitGraceMs;
         s.AutoExpandOnDrag             = AutoExpandOnDrag;
         s.ShowMediaIslandNotifications = ShowMediaIslandNotifications;
+        s.ShowStartupGreeting          = ShowStartupGreeting;
         s.HotkeyPreset                 = HotkeyPreset;
         s.TargetMonitorIndex           = TargetMonitorIndex;
         s.HandleWidth                  = HandleWidth;
@@ -172,6 +198,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ExitGraceMs                  = 300;
         AutoExpandOnDrag             = true;
         ShowMediaIslandNotifications = true;
+        ShowStartupGreeting          = true;
         HotkeyPreset                 = "Alt+Space";
         TargetMonitorIndex           = 0;
         HandleWidth                  = 72;
@@ -185,5 +212,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         TimerSoundChimesEnabled      = true;
         DualActivityEnabled          = true;
         LaunchAtStartup              = false;
+    }
+
+    [RelayCommand]
+    private void OpenGitHub()
+    {
+        if (Uri.TryCreate(GitHubRepoUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+        {
+            try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); } catch { }
+        }
+    }
+
+    [RelayCommand]
+    private static void OpenAppDataFolder()
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Win11Notch");
+            Directory.CreateDirectory(dir);
+            Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+        }
+        catch { }
     }
 }

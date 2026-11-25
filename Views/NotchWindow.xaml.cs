@@ -24,6 +24,7 @@ public partial class NotchWindow : Window
     private readonly ShelfService             _shelfService;
     private readonly SettingsViewModel        _settingsVm;
     private readonly ClipboardService        _clipboardService;
+    private readonly QuickShareService       _quickShareService;
 
     private SettingsWindow? _settingsWindow;
     private IntPtr          _hwnd;
@@ -43,7 +44,8 @@ public partial class NotchWindow : Window
         FullscreenDetectorService fullscreenDetector,
         ShelfService             shelfService,
         SettingsViewModel        settingsVm,
-        ClipboardService         clipboardService)
+        ClipboardService         clipboardService,
+        QuickShareService        quickShareService)
     {
         _vm                 = vm;
         _sm                 = sm;
@@ -54,6 +56,7 @@ public partial class NotchWindow : Window
         _shelfService       = shelfService;
         _settingsVm         = settingsVm;
         _clipboardService   = clipboardService;
+        _quickShareService  = quickShareService;
 
         DataContext = vm;
         InitializeComponent();
@@ -66,12 +69,25 @@ public partial class NotchWindow : Window
 
         _sm.StateChanged += OnStateChanged;
 
-        _vm.OpenSettingsRequested   += ShowSettingsWindow;
+        _vm.OpenSettingsRequested   += () => ShowSettingsWindow(0);
+        _vm.GreetingPeriodRolledOver += OnGreetingPeriodRolledOver;
         _settingsVm.SettingsChanged += OnSettingsUpdated;
 
-        _vm.MediaToastActiveChanged  += OnMediaToastActiveChanged;
-        _vm.VolumeToastActiveChanged += OnVolumeToastActiveChanged;
-        _vm.PowerToastActiveChanged  += OnPowerToastActiveChanged;
+        _vm.MediaToastActiveChanged      += OnMediaToastActiveChanged;
+        _vm.VolumeToastActiveChanged     += OnVolumeToastActiveChanged;
+        _vm.PowerToastActiveChanged      += OnPowerToastActiveChanged;
+        _vm.BrightnessToastActiveChanged += OnBrightnessToastActiveChanged;
+
+        _vm.PrepareForScreenPickAsync = async () =>
+        {
+            Opacity = 0;
+            _sm.Collapse();
+            await Task.Delay(75);
+        };
+        _vm.RestoreAfterScreenPick = () =>
+        {
+            Opacity = OpacityFor(_sm.State);
+        };
 
         _vm.PropertyChanged += (s, e) =>
         {
@@ -102,7 +118,9 @@ public partial class NotchWindow : Window
             _settings.Current.HandleThickness,
             _settings.Current.DynamicContentSizing,
             _settings.Current.DualActivityEnabled,
-            _vm.HasBluetoothBattery);
+            _vm.HasBluetoothBattery,
+            _vm.IsBrightnessToastActive,
+            _vm.HasUpcomingReminder);
 
         var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th, _settings.Current.TargetMonitorIndex);
 
@@ -154,6 +172,11 @@ public partial class NotchWindow : Window
         if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
     }
 
+    private void OnBrightnessToastActiveChanged(bool isBrightnessToastActive)
+    {
+        if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
+    }
+
     private void OnVolumeToastActiveChanged(bool isVolumeToastActive)
     {
         if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
@@ -186,6 +209,9 @@ public partial class NotchWindow : Window
 
         // Event-driven clipboard listener (zero idle polling)
         _clipboardService.Start(_hwnd);
+
+        // Bind HWND for Windows Share Sheet fallback
+        _quickShareService.AttachWindow(_hwnd);
     }
 
     private void OnForegroundWindowChanged()
@@ -283,10 +309,11 @@ public partial class NotchWindow : Window
         }
     }
 
-    private void ShowPowerToast(string icon, string title, string detail)
+    private void ShowPowerToast(string icon, string title, string detail, int durationMs = 2200, string accentHex = "#FF5E36")
     {
         if (_sm.State == NotchState.PeekExpanded || _sm.State == NotchState.Stealth) return;
 
+        _vm.PowerToastIconBrush = NotchViewModel.CreateFrozenBrush(accentHex);
         _vm.PowerToastIcon = icon;
         _vm.PowerToastTitle = title;
         _vm.PowerToastDetail = detail;
@@ -298,12 +325,15 @@ public partial class NotchWindow : Window
         }
 
         _powerToastTimer?.Stop();
-        _powerToastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2200) };
+        _powerToastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(durationMs) };
         _powerToastTimer.Tick += (_, _) =>
         {
             _powerToastTimer.Stop();
             _vm.IsPowerToastActive = false;
-            if (_sm.State == NotchState.CollapsedHover && !_vm.IsMediaToastActive && !_vm.IsVolumeToastActive)
+            if (_sm.State == NotchState.CollapsedHover
+                && !_vm.IsMediaToastActive
+                && !_vm.IsVolumeToastActive
+                && !_vm.IsBrightnessToastActive)
             {
                 _sm.Collapse();
             }
@@ -311,7 +341,7 @@ public partial class NotchWindow : Window
         _powerToastTimer.Start();
     }
 
-    // ── Startup ──────────────────────────────────────────────────────────────
+    // ── Startup & Time-Based Greeting ────────────────────────────────────────
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
@@ -320,8 +350,48 @@ public partial class NotchWindow : Window
         SnapToState(NotchState.Idle);
         Opacity = OpacityFor(NotchState.Idle);
 
+        if (_settings.Current.ShowStartupGreeting)
+        {
+            _ = TriggerStartupGreetingAsync();
+        }
+
         // Trim initial startup allocations once the idle handle settles
         WindowStyleHelper.TrimProcessWorkingSet();
+    }
+
+    private async Task TriggerStartupGreetingAsync()
+    {
+        await Task.Delay(500);
+        if (!_settings.Current.ShowStartupGreeting) return;
+        TriggerGreetingBanner(durationMs: 3600, ignoreActiveCheck: false);
+    }
+
+    private void OnGreetingPeriodRolledOver(TimeGreetingInfo info)
+    {
+        if (!_settings.Current.ShowStartupGreeting) return;
+        TriggerGreetingBanner(durationMs: 3000, ignoreActiveCheck: false);
+    }
+
+    public void TriggerGreetingBanner(int durationMs = 3600, bool ignoreActiveCheck = true)
+    {
+        if (!ignoreActiveCheck)
+        {
+            if (_sm.State != NotchState.Idle) return;
+            if (_vm.IsMediaToastActive || _vm.IsVolumeToastActive || _vm.IsBrightnessToastActive || _vm.IsPowerToastActive) return;
+        }
+        else if (_sm.State == NotchState.PeekExpanded)
+        {
+            _sm.Collapse();
+        }
+        else if (_sm.State == NotchState.Stealth)
+        {
+            return;
+        }
+
+        var now = DateTime.Now;
+        var info = GreetingHelper.GetGreeting(now);
+        string detail = $"{info.Tagline} • {now:h:mm tt}";
+        ShowPowerToast(info.IconGlyph, info.DisplayTitle, detail, durationMs, info.AccentHex);
     }
 
     // ── Settings update listener ──────────────────────────────────────────────
@@ -336,13 +406,14 @@ public partial class NotchWindow : Window
         SnapToState(_sm.State);
     }
 
-    public void ShowSettingsWindow()
+    public void ShowSettingsWindow(int categoryIndex = 0)
     {
         if (_settingsWindow == null || !_settingsWindow.IsLoaded)
         {
             _settingsWindow = new SettingsWindow(_settingsVm);
         }
 
+        _settingsVm.SelectedCategoryIndex = Math.Clamp(categoryIndex, 0, 4);
         _settingsVm.RefreshDiagnostics();
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -356,7 +427,8 @@ public partial class NotchWindow : Window
     private void OnStateChanged(object? sender, NotchState newState)
     {
         App.Log($"[NotchWindow] OnStateChanged: {_prevState} -> {newState}");
-        bool collapsedFromPeek = _prevState == NotchState.PeekExpanded && newState == NotchState.Idle;
+        bool collapsedToIdle = (_prevState == NotchState.PeekExpanded || _prevState == NotchState.CollapsedHover)
+                               && newState == NotchState.Idle;
         _prevState = newState;
 
         // ── Focus management ──────────────────────────────────────────────
@@ -397,7 +469,7 @@ public partial class NotchWindow : Window
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = targetOpacity;
-            if (collapsedFromPeek)
+            if (collapsedToIdle)
             {
                 WindowStyleHelper.TrimProcessWorkingSet();
             }
@@ -492,8 +564,8 @@ public partial class NotchWindow : Window
     private void OnDeactivated(object? sender, EventArgs e)
     {
         App.Log($"[NotchWindow] OnDeactivated fired! State={_sm.State}");
-        // Do not collapse if the user clicked into the Settings window
-        if (_settingsWindow != null && _settingsWindow.IsActive) return;
+        // Do not collapse if the user clicked into Settings or has an open file picker dialog
+        if ((_settingsWindow != null && _settingsWindow.IsActive) || _vm.IsModalPickerOpen) return;
 
         // Debounce: ignore deactivations during initial expand animation or focus handoff
         if ((DateTime.UtcNow - _lastExpandedTime).TotalMilliseconds < 600)
@@ -531,6 +603,7 @@ public partial class NotchWindow : Window
                 Key.D4 => 3,
                 Key.D5 => 4,
                 Key.D6 => 5,
+                Key.D7 => 6,
                 _      => -1
             };
             if (tabIdx >= 0)
@@ -605,6 +678,9 @@ public partial class NotchWindow : Window
     {
         base.OnMouseEnter(e);
         App.Log($"[NotchWindow] OnMouseEnter (State={_sm.State})");
+        _vm.IsFileDragOverlayVisible = false;
+        _vm.IsDropDockHovered = false;
+        _vm.IsDropShareHovered = false;
         _sm.OnMouseEnter();
     }
 
@@ -618,8 +694,32 @@ public partial class NotchWindow : Window
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
         base.OnMouseDown(e);
+        if (e.ChangedButton == MouseButton.Middle && _sm.State is NotchState.Idle or NotchState.CollapsedHover)
+        {
+            _vm.PlayPauseCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
         App.Log($"[NotchWindow] OnMouseDown (Button={e.ChangedButton}, State={_sm.State})");
         _sm.OnClick();
+    }
+
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (_sm.State is NotchState.Idle or NotchState.CollapsedHover)
+        {
+            int dir = e.Delta > 0 ? 1 : -1;
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
+            {
+                _vm.NudgeBrightnessFromGesture(dir);
+            }
+            else
+            {
+                _vm.NudgeVolumeFromGesture(dir);
+            }
+            e.Handled = true;
+        }
     }
 
     // ── Drag and drop file staging ───────────────────────────────────────────
@@ -627,15 +727,23 @@ public partial class NotchWindow : Window
     protected override void OnDragEnter(DragEventArgs e)
     {
         base.OnDragEnter(e);
-        if (!_settings.Current.AutoExpandOnDrag) return;
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
 
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        // If already on the Share tab (Tab 6), allow direct drop onto the queue without overlay
+        if (_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != 6)
         {
-            _vm.SelectedTabIndex = 2; // Switch to Shelf tab (Dock)
-            _sm.OnDragEnter();
-            e.Effects = DragDropEffects.Copy;
-            e.Handled = true;
+            _vm.IsFileDragOverlayVisible = true;
+            _vm.IsDropDockHovered = false;
+            _vm.IsDropShareHovered = false;
         }
+
+        if (_settings.Current.AutoExpandOnDrag && _sm.State != NotchState.PeekExpanded)
+        {
+            _sm.OnDragEnter();
+        }
+
+        e.Effects = DragDropEffects.Copy;
+        e.Handled = true;
     }
 
     protected override void OnDragOver(DragEventArgs e)
@@ -648,17 +756,94 @@ public partial class NotchWindow : Window
         }
     }
 
+    protected override void OnDragLeave(DragEventArgs e)
+    {
+        base.OnDragLeave(e);
+        var pos = e.GetPosition(this);
+        if (pos.X <= 2 || pos.Y <= 2 || pos.X >= ActualWidth - 2 || pos.Y >= ActualHeight - 2)
+        {
+            _vm.IsFileDragOverlayVisible = false;
+            _vm.IsDropDockHovered = false;
+            _vm.IsDropShareHovered = false;
+        }
+    }
+
     protected override void OnDrop(DragEventArgs e)
     {
         base.OnDrop(e);
+        _vm.IsFileDragOverlayVisible = false;
+        _vm.IsDropDockHovered = false;
+        _vm.IsDropShareHovered = false;
+
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             if (e.Data.GetData(DataFormats.FileDrop) is string[] files)
             {
-                _shelfService.AddFiles(files);
-                _vm.SelectedTabIndex = 2; // Switch to Shelf tab (Dock)
+                if (_sm.State == NotchState.PeekExpanded && _vm.SelectedTabIndex == 6)
+                {
+                    _quickShareService.AddPaths(files);
+                    _vm.RefreshQuickShareState();
+                }
+                else
+                {
+                    _shelfService.AddFiles(files);
+                    _vm.SelectedTabIndex = 2; // Default fallback to Shelf Dock
+                }
             }
             e.Handled = true;
+        }
+    }
+
+    private void OnDockDropTargetDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            _vm.IsDropDockHovered = true;
+            _vm.IsDropShareHovered = false;
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private void OnDockDropTargetDragLeave(object sender, DragEventArgs e) => _vm.IsDropDockHovered = false;
+
+    private void OnDockDropTargetDrop(object sender, DragEventArgs e)
+    {
+        _vm.IsFileDragOverlayVisible = false;
+        _vm.IsDropDockHovered = false;
+        _vm.IsDropShareHovered = false;
+
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
+        {
+            _shelfService.AddFiles(files);
+            _vm.SelectedTabIndex = 2;
+            e.Handled = true;
+        }
+    }
+
+    private void OnShareDropTargetDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            _vm.IsDropShareHovered = true;
+            _vm.IsDropDockHovered = false;
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    private void OnShareDropTargetDragLeave(object sender, DragEventArgs e) => _vm.IsDropShareHovered = false;
+
+    private async void OnShareDropTargetDrop(object sender, DragEventArgs e)
+    {
+        _vm.IsFileDragOverlayVisible = false;
+        _vm.IsDropDockHovered = false;
+        _vm.IsDropShareHovered = false;
+
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)
+        {
+            e.Handled = true;
+            await _vm.SendDroppedFilesViaQuickShareAsync(files);
         }
     }
 
@@ -715,7 +900,9 @@ public partial class NotchWindow : Window
             _settings.Current.HandleThickness,
             _settings.Current.DynamicContentSizing,
             _settings.Current.DualActivityEnabled,
-            _vm.HasBluetoothBattery);
+            _vm.HasBluetoothBattery,
+            _vm.IsBrightnessToastActive,
+            _vm.HasUpcomingReminder);
 
         var (l, t) = _monitor.ComputePosition(_settings.Current.DockEdge, w, h, _settings.Current.TargetMonitorIndex);
 

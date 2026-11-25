@@ -6,7 +6,7 @@ namespace Win11Notch.Core.Settings;
 /// </summary>
 public sealed class AppSettings
 {
-    /// <summary>Window opacity while in Idle state (0–1). Default 0.20 = 20%.</summary>
+    /// <summary>Window opacity while in Idle state (0.10–1.00). Default 0.20 = 20%.</summary>
     public double IdleOpacity { get; set; } = 0.20;
 
     /// <summary>Dock edge: "Top" | "Left" | "Right".</summary>
@@ -29,6 +29,9 @@ public sealed class AppSettings
 
     /// <summary>Whether to show Dynamic Island temporary toast on song change.</summary>
     public bool ShowMediaIslandNotifications { get; set; } = true;
+
+    /// <summary>Whether to display a time-aware greeting toast banner when Win11Notch starts.</summary>
+    public bool ShowStartupGreeting { get; set; } = true;
 
     /// <summary>Global hotkey preset (e.g. "Alt+Space", "Win+Z", "Ctrl+Shift+Space", "Ctrl+~").</summary>
     public string HotkeyPreset { get; set; } = "Alt+Space";

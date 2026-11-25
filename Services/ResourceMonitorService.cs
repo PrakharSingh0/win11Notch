@@ -53,6 +53,27 @@ public sealed class ResourceMonitorService : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
+    [DllImport("dxgi.dll")]
+    private static extern int CreateDXGIFactory1(ref Guid riid, out IntPtr ppFactory);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private unsafe struct DXGI_ADAPTER_DESC1
+    {
+        public fixed char Description[128];
+        public uint VendorId;
+        public uint DeviceId;
+        public uint SubSysId;
+        public uint Revision;
+        public nuint DedicatedVideoMemory;
+        public nuint DedicatedSystemMemory;
+        public nuint SharedSystemMemory;
+        public uint LuidLowPart;
+        public int LuidHighPart;
+        public uint Flags;
+    }
+
+    private static readonly Guid IID_IDXGIFactory1 = new("770aae78-f26f-4dba-a829-253c83d1b387");
+
     private CancellationTokenSource? _cts;
     private long _prevIdle, _prevKernel, _prevUser;
 
@@ -64,6 +85,23 @@ public sealed class ResourceMonitorService : IDisposable
     private DateTime _lastNicQuery = DateTime.MinValue;
 
     // GPU and Disk performance counters
+    private sealed class GpuAdapterSlot
+    {
+        public string Name { get; init; } = string.Empty;
+        public string LuidKey { get; init; } = string.Empty;
+        public bool IsDiscrete { get; init; }
+        public double DedicatedTotalGb { get; init; }
+        public double SharedTotalGb { get; init; }
+        public List<PerformanceCounter> EngineCounters { get; } = new();
+        public PerformanceCounter? DedicatedVramCounter { get; set; }
+        public PerformanceCounter? SharedVramCounter { get; set; }
+        public List<double> History { get; } = new();
+        public int CurrentPercent { get; set; }
+        public double CurrentVramUsedGb { get; set; }
+    }
+
+    private readonly List<GpuAdapterSlot> _gpuSlots = new();
+    private DateTime _lastGpuEngineRefresh = DateTime.MinValue;
     private List<PerformanceCounter>? _gpuCounters;
     private List<PerformanceCounter>? _vramCounters;
     private bool _gpuCountersInitialized;
@@ -78,6 +116,7 @@ public sealed class ResourceMonitorService : IDisposable
     public int    GpuPercent           { get; private set; }
     public double VramUsedGb           { get; private set; }
     public double VramTotalGb          { get; private set; }
+    public ObservableCollection<GpuAdapterInfo> GpuAdapters { get; } = new();
     public int    DiskPercent          { get; private set; }
     public double DownloadBytesPerSec  { get; private set; }
     public double UploadBytesPerSec    { get; private set; }
@@ -169,72 +208,224 @@ public sealed class ResourceMonitorService : IDisposable
         if (_gpuCountersInitialized) return;
         _gpuCountersInitialized = true;
 
+        EnumerateDxgiAdapters();
+
         try
         {
-            // Read max dedicated GPU adapter VRAM capacity once from display class registry
-            using var classKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
-            if (classKey != null)
+            var catVram = new PerformanceCounterCategory("GPU Adapter Memory");
+            var namesVram = catVram.GetInstanceNames();
+
+            if (_gpuSlots.Count > 0)
             {
-                ulong maxBytes = 0;
-                foreach (var subName in classKey.GetSubKeyNames())
+                foreach (var name in namesVram)
                 {
-                    if (!char.IsDigit(subName[0])) continue;
+                    var slot = _gpuSlots.FirstOrDefault(s =>
+                        !string.IsNullOrEmpty(s.LuidKey) &&
+                        name.Contains(s.LuidKey, StringComparison.OrdinalIgnoreCase));
+
+                    if (slot != null)
+                    {
+                        try
+                        {
+                            var ded = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", name, true);
+                            _ = ded.NextValue();
+                            slot.DedicatedVramCounter = ded;
+                        }
+                        catch { }
+
+                        try
+                        {
+                            var sh = new PerformanceCounter("GPU Adapter Memory", "Shared Usage", name, true);
+                            _ = sh.NextValue();
+                            slot.SharedVramCounter = sh;
+                        }
+                        catch { }
+                    }
+                }
+            }
+            else
+            {
+                _vramCounters = new List<PerformanceCounter>();
+                foreach (var name in namesVram)
+                {
                     try
                     {
-                        using var sub = classKey.OpenSubKey(subName);
-                        if (sub == null) continue;
-                        var qw = sub.GetValue("HardwareInformation.qwMemorySize");
-                        if (qw is long l && l > 0) maxBytes = Math.Max(maxBytes, (ulong)l);
-                        else if (qw is byte[] b && b.Length == 8) maxBytes = Math.Max(maxBytes, BitConverter.ToUInt64(b, 0));
-                        else if (sub.GetValue("HardwareInformation.MemorySize") is int dw && dw > 0) maxBytes = Math.Max(maxBytes, (ulong)(uint)dw);
+                        var pc = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", name, true);
+                        _ = pc.NextValue();
+                        _vramCounters.Add(pc);
                     }
                     catch { }
                 }
-                if (maxBytes > 0)
-                {
-                    VramTotalGb = Math.Round(maxBytes / (1024.0 * 1024.0 * 1024.0), 1);
-                }
             }
         }
-        catch { }
+        catch { /* GPU Adapter Memory counters may be restricted */ }
 
+        RefreshGpuEngineCounters();
+
+        // Legacy total VRAM fallback if DXGI didn't enumerate any slots
+        if (_gpuSlots.Count == 0)
+        {
+            try
+            {
+                using var classKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+                if (classKey != null)
+                {
+                    ulong maxBytes = 0;
+                    foreach (var subName in classKey.GetSubKeyNames())
+                    {
+                        if (!char.IsDigit(subName[0])) continue;
+                        try
+                        {
+                            using var sub = classKey.OpenSubKey(subName);
+                            if (sub == null) continue;
+                            var qw = sub.GetValue("HardwareInformation.qwMemorySize");
+                            if (qw is long l && l > 0) maxBytes = Math.Max(maxBytes, (ulong)l);
+                            else if (qw is byte[] b && b.Length == 8) maxBytes = Math.Max(maxBytes, BitConverter.ToUInt64(b, 0));
+                            else if (sub.GetValue("HardwareInformation.MemorySize") is int dw && dw > 0) maxBytes = Math.Max(maxBytes, (ulong)(uint)dw);
+                        }
+                        catch { }
+                    }
+                    if (maxBytes > 0)
+                    {
+                        VramTotalGb = Math.Round(maxBytes / (1024.0 * 1024.0 * 1024.0), 1);
+                    }
+                }
+            }
+            catch { }
+        }
+    }
+
+    private unsafe void EnumerateDxgiAdapters()
+    {
+        IntPtr factory = IntPtr.Zero;
+        try
+        {
+            var iid = IID_IDXGIFactory1;
+            if (CreateDXGIFactory1(ref iid, out factory) != 0 || factory == IntPtr.Zero)
+                return;
+
+            var factoryVtbl = *(IntPtr**)factory;
+            var enumAdapters1 = (delegate* unmanaged[Stdcall]<IntPtr, uint, out IntPtr, int>)factoryVtbl[12];
+
+            uint i = 0;
+            while (enumAdapters1(factory, i, out IntPtr adapter) == 0 && adapter != IntPtr.Zero)
+            {
+                try
+                {
+                    var adapterVtbl = *(IntPtr**)adapter;
+                    var getDesc1 = (delegate* unmanaged[Stdcall]<IntPtr, out DXGI_ADAPTER_DESC1, int>)adapterVtbl[10];
+
+                    if (getDesc1(adapter, out var desc) == 0)
+                    {
+                        // Skip software renderers (e.g. Microsoft Basic Render Driver)
+                        bool isSoftware = (desc.Flags & 2u) != 0 || (desc.VendorId == 0x1414 && desc.DeviceId == 0x008C);
+                        if (!isSoftware)
+                        {
+                            string name = Marshal.PtrToStringUni((IntPtr)desc.Description)?.Trim() ?? $"GPU {i}";
+                            double dedGb = Math.Round(desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0), 1);
+                            double shGb = Math.Round(desc.SharedSystemMemory / (1024.0 * 1024.0 * 1024.0), 1);
+                            bool isDiscrete = dedGb >= 0.5;
+                            string luidKey = $"luid_0x{(uint)desc.LuidHighPart:X8}_0x{desc.LuidLowPart:X8}";
+
+                            if (!_gpuSlots.Any(s => string.Equals(s.LuidKey, luidKey, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                _gpuSlots.Add(new GpuAdapterSlot
+                                {
+                                    Name = name,
+                                    LuidKey = luidKey,
+                                    IsDiscrete = isDiscrete,
+                                    DedicatedTotalGb = dedGb,
+                                    SharedTotalGb = shGb
+                                });
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    var adapterVtbl = *(IntPtr**)adapter;
+                    var releaseAdapter = (delegate* unmanaged[Stdcall]<IntPtr, uint>)adapterVtbl[2];
+                    releaseAdapter(adapter);
+                }
+                i++;
+            }
+
+            // Order discrete GPU(s) first, then integrated GPU(s)
+            _gpuSlots.Sort((a, b) => b.IsDiscrete.CompareTo(a.IsDiscrete));
+        }
+        catch { /* DXGI unavailable */ }
+        finally
+        {
+            if (factory != IntPtr.Zero)
+            {
+                var factoryVtbl = *(IntPtr**)factory;
+                var releaseFactory = (delegate* unmanaged[Stdcall]<IntPtr, uint>)factoryVtbl[2];
+                releaseFactory(factory);
+            }
+        }
+    }
+
+    private void RefreshGpuEngineCounters()
+    {
+        _lastGpuEngineRefresh = DateTime.UtcNow;
         try
         {
             var catGpu = new PerformanceCounterCategory("GPU Engine");
             var namesGpu = catGpu.GetInstanceNames();
-            _gpuCounters = new List<PerformanceCounter>();
 
-            foreach (var name in namesGpu)
+            if (_gpuSlots.Count > 0)
             {
-                if (name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
+                foreach (var slot in _gpuSlots)
                 {
-                    try
+                    foreach (var c in slot.EngineCounters) { try { c.Dispose(); } catch { } }
+                    slot.EngineCounters.Clear();
+                }
+
+                foreach (var name in namesGpu)
+                {
+                    if (!name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var slot = _gpuSlots.FirstOrDefault(s =>
+                        !string.IsNullOrEmpty(s.LuidKey) &&
+                        name.Contains(s.LuidKey, StringComparison.OrdinalIgnoreCase));
+
+                    if (slot != null)
                     {
-                        var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", name, true);
-                        _ = pc.NextValue(); // Prime first sample
-                        _gpuCounters.Add(pc);
+                        try
+                        {
+                            var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", name, true);
+                            _ = pc.NextValue();
+                            slot.EngineCounters.Add(pc);
+                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
-
-            var catVram = new PerformanceCounterCategory("GPU Adapter Memory");
-            var namesVram = catVram.GetInstanceNames();
-            _vramCounters = new List<PerformanceCounter>();
-
-            foreach (var name in namesVram)
+            else
             {
-                try
+                if (_gpuCounters != null)
                 {
-                    var pc = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", name, true);
-                    _ = pc.NextValue();
-                    _vramCounters.Add(pc);
+                    foreach (var c in _gpuCounters) { try { c.Dispose(); } catch { } }
                 }
-                catch { }
+                _gpuCounters = new List<PerformanceCounter>();
+                foreach (var name in namesGpu)
+                {
+                    if (name.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", name, true);
+                            _ = pc.NextValue();
+                            _gpuCounters.Add(pc);
+                        }
+                        catch { }
+                    }
+                }
             }
         }
-        catch { /* GPU counters may be restricted on some virtual environments */ }
+        catch { }
     }
 
     private void CollectAndDispatchStats()
@@ -273,27 +464,107 @@ public sealed class ResourceMonitorService : IDisposable
             ramUsed    = Math.Round((mem.ullTotalPhys - mem.ullAvailPhys) / (1024.0 * 1024.0 * 1024.0), 1);
         }
 
-        // ── 3. GPU & VRAM ────────────────────────────────────────────────
+        // ── 3. GPU & VRAM (Per-Adapter DXGI + LUID Telemetry) ──────────────
         int gpu = GpuPercent;
-        if (_gpuCounters != null && _gpuCounters.Count > 0)
-        {
-            float gpuSum = 0;
-            foreach (var c in _gpuCounters)
-            {
-                try { gpuSum += c.NextValue(); } catch { }
-            }
-            gpu = Math.Clamp((int)gpuSum, 0, 100);
-        }
-
         double vram = VramUsedGb;
-        if (_vramCounters != null && _vramCounters.Count > 0)
+        double vramTotal = VramTotalGb;
+        var gpuSnapshots = new List<GpuAdapterInfo>();
+
+        if (_gpuSlots.Count > 0)
         {
-            float vramBytes = 0;
-            foreach (var c in _vramCounters)
+            if ((DateTime.UtcNow - _lastGpuEngineRefresh).TotalSeconds > 15)
             {
-                try { vramBytes += c.NextValue(); } catch { }
+                RefreshGpuEngineCounters();
             }
-            vram = Math.Round(vramBytes / (1024.0 * 1024.0 * 1024.0), 2);
+
+            foreach (var slot in _gpuSlots)
+            {
+                float sum = 0;
+                foreach (var c in slot.EngineCounters)
+                {
+                    try { sum += c.NextValue(); } catch { }
+                }
+                int pct = Math.Clamp((int)Math.Round(sum), 0, 100);
+                slot.CurrentPercent = pct;
+                AppendHistory(slot.History, pct);
+
+                double dedUsed = 0;
+                if (slot.DedicatedVramCounter != null)
+                {
+                    try { dedUsed = slot.DedicatedVramCounter.NextValue() / (1024.0 * 1024.0 * 1024.0); } catch { }
+                }
+
+                double shUsed = 0;
+                if (slot.SharedVramCounter != null)
+                {
+                    try { shUsed = slot.SharedVramCounter.NextValue() / (1024.0 * 1024.0 * 1024.0); } catch { }
+                }
+
+                double usedGb = slot.IsDiscrete
+                    ? Math.Round(dedUsed, 2)
+                    : Math.Round(slot.DedicatedTotalGb >= 0.25 ? dedUsed : (dedUsed + shUsed), 2);
+                double totalGb = slot.IsDiscrete
+                    ? slot.DedicatedTotalGb
+                    : (slot.DedicatedTotalGb >= 0.25 ? slot.DedicatedTotalGb : slot.SharedTotalGb);
+
+                slot.CurrentVramUsedGb = usedGb;
+
+                int vramPct = totalGb > 0 ? Math.Clamp((int)Math.Round((usedGb * 100.0) / totalGb), 0, 100) : 0;
+                string vramText = slot.IsDiscrete
+                    ? (totalGb > 0 ? $"VRAM {usedGb:F1} / {totalGb:F1} GB" : $"VRAM {usedGb:F1} GB")
+                    : (totalGb > 0 ? $"Shared {usedGb:F1} / {totalGb:F1} GB" : $"Shared {usedGb:F1} GB");
+
+                gpuSnapshots.Add(new GpuAdapterInfo
+                {
+                    Name = slot.Name,
+                    LuidKey = slot.LuidKey,
+                    IsDiscrete = slot.IsDiscrete,
+                    GpuPercent = pct,
+                    VramUsedGb = usedGb,
+                    VramTotalGb = totalGb,
+                    VramPercent = vramPct,
+                    VramText = vramText,
+                    RoleLabel = slot.IsDiscrete ? "dGPU" : "iGPU",
+                    AccentHex = slot.IsDiscrete ? "#69F0AE" : "#40C4FF",
+                    History = new List<double>(slot.History)
+                });
+            }
+
+            int maxLoad = gpuSnapshots.Max(g => g.GpuPercent);
+            foreach (var snap in gpuSnapshots)
+            {
+                snap.IsActive = snap.GpuPercent >= 2 && (snap.GpuPercent == maxLoad || snap.GpuPercent >= 10);
+            }
+
+            // Summary aggregate favors the active/busiest GPU (or discrete GPU when both idle)
+            var primarySnap = gpuSnapshots.FirstOrDefault(g => g.IsActive)
+                              ?? gpuSnapshots.FirstOrDefault(g => g.IsDiscrete)
+                              ?? gpuSnapshots[0];
+            gpu = maxLoad;
+            vram = primarySnap.VramUsedGb;
+            vramTotal = primarySnap.VramTotalGb;
+        }
+        else
+        {
+            if (_gpuCounters != null && _gpuCounters.Count > 0)
+            {
+                float gpuSum = 0;
+                foreach (var c in _gpuCounters)
+                {
+                    try { gpuSum += c.NextValue(); } catch { }
+                }
+                gpu = Math.Clamp((int)gpuSum, 0, 100);
+            }
+
+            if (_vramCounters != null && _vramCounters.Count > 0)
+            {
+                float vramBytes = 0;
+                foreach (var c in _vramCounters)
+                {
+                    try { vramBytes += c.NextValue(); } catch { }
+                }
+                vram = Math.Round(vramBytes / (1024.0 * 1024.0 * 1024.0), 2);
+            }
         }
 
         // ── 3b. Disk Activity (% Disk Time) ──────────────────────────────
@@ -464,6 +735,7 @@ public sealed class ResourceMonitorService : IDisposable
             RamUsedGb           = ramUsed;
             GpuPercent          = gpu;
             VramUsedGb          = vram;
+            VramTotalGb         = vramTotal;
             DiskPercent         = disk;
             DownloadBytesPerSec = dnSpeed;
             UploadBytesPerSec   = upSpeed;
@@ -482,6 +754,20 @@ public sealed class ResourceMonitorService : IDisposable
             AppendHistory(DiskHistory, DiskPercent);
             AppendHistory(DownloadHistory, dnGraph);
             AppendHistory(UploadHistory, upGraph);
+
+            // Sync GpuAdapters collection on UI thread
+            if (GpuAdapters.Count != gpuSnapshots.Count)
+            {
+                GpuAdapters.Clear();
+                foreach (var g in gpuSnapshots) GpuAdapters.Add(g);
+            }
+            else
+            {
+                for (int i = 0; i < gpuSnapshots.Count; i++)
+                {
+                    GpuAdapters[i] = gpuSnapshots[i];
+                }
+            }
 
             // Sync Drives collection on UI thread
             if (Drives.Count != driveList.Count || !Drives.Select(x => x.Name).SequenceEqual(driveList.Select(x => x.Name)))
@@ -535,6 +821,14 @@ public sealed class ResourceMonitorService : IDisposable
     public void Dispose()
     {
         StopMonitoring();
+        foreach (var slot in _gpuSlots)
+        {
+            foreach (var c in slot.EngineCounters) { try { c.Dispose(); } catch { } }
+            slot.EngineCounters.Clear();
+            try { slot.DedicatedVramCounter?.Dispose(); } catch { }
+            try { slot.SharedVramCounter?.Dispose(); } catch { }
+        }
+        _gpuSlots.Clear();
         if (_gpuCounters != null)
         {
             foreach (var c in _gpuCounters) { try { c.Dispose(); } catch { } }

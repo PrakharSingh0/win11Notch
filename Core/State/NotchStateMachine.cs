@@ -12,13 +12,18 @@ public sealed class NotchStateMachine
     private readonly SettingsService _settings;
 
     private NotchState       _state = NotchState.Idle;
+    private bool             _isManualStealth;
     private DispatcherTimer? _dwellTimer;
     private DispatcherTimer? _graceTimer;
 
     /// <summary>Raised on the UI thread whenever the state transitions.</summary>
     public event EventHandler<NotchState>? StateChanged;
 
+    /// <summary>Raised when the user toggles manual Stealth / Hide Handle via tray.</summary>
+    public event EventHandler<bool>? ManualStealthChanged;
+
     public NotchState State => _state;
+    public bool IsManualStealth => _isManualStealth;
 
     public NotchStateMachine(SettingsService settings) => _settings = settings;
 
@@ -84,13 +89,33 @@ public sealed class NotchStateMachine
     public void Toggle()
     {
         if (_state == NotchState.PeekExpanded) { Collapse(); return; }
+        if (_isManualStealth)
+        {
+            _isManualStealth = false;
+            ManualStealthChanged?.Invoke(this, false);
+        }
         _dwellTimer?.Stop();
         _graceTimer?.Stop();
         Transition(NotchState.PeekExpanded);
     }
 
+    public void SetManualStealth(bool hidden)
+    {
+        if (_isManualStealth == hidden) return;
+        _isManualStealth = hidden;
+        _dwellTimer?.Stop();
+        _graceTimer?.Stop();
+        Transition(hidden ? NotchState.Stealth : NotchState.Idle);
+        ManualStealthChanged?.Invoke(this, hidden);
+    }
+
     public void EnterStealth() => Transition(NotchState.Stealth);
-    public void ExitStealth()  => Transition(NotchState.Idle);
+
+    public void ExitStealth()
+    {
+        if (_isManualStealth) return;
+        Transition(NotchState.Idle);
+    }
 
     // ── Internals ────────────────────────────────────────────────────────────
 

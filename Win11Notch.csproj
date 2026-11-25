@@ -12,7 +12,24 @@
     <RootNamespace>Win11Notch</RootNamespace>
     <AssemblyName>Win11Notch</AssemblyName>
     <StartupObject>Win11Notch.App</StartupObject>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>Win11Notch</Product>
+    <Title>Win11Notch</Title>
+    <Description>Windows 11 Dynamic Island Overlay and Productivity Hub</Description>
+    <Authors>Prakhar Singh</Authors>
+    <Company>Prakhar Singh</Company>
+    <Copyright>Copyright © 2026 Prakhar Singh</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/PrakharSingh0/win11Notch</RepositoryUrl>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />

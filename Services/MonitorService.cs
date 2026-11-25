@@ -144,7 +144,9 @@ public sealed class MonitorService
         int handleThickness = 8,
         bool dynamicSizing = true,
         bool dualActivityEnabled = true,
-        bool hasBluetoothBattery = false)
+        bool hasBluetoothBattery = false,
+        bool isBrightnessToast = false,
+        bool hasUpcomingReminder = false)
     {
         bool isVerticalEdge = dockEdge is "Left" or "Right";
         int hw = Math.Clamp(handleWidth, 40, 200);
@@ -155,9 +157,13 @@ public sealed class MonitorService
         double hoverWidth;
         if (!dynamicSizing)
         {
-            hoverWidth = (isVolumeToast || isPowerToast) ? 290 : (isMediaToast ? 370 : 300);
+            hoverWidth = isPowerToast ? 355 : (isVolumeToast || isBrightnessToast) ? 290 : (isMediaToast ? 370 : 300);
         }
-        else if (isVolumeToast || isPowerToast)
+        else if (isPowerToast)
+        {
+            hoverWidth = 355;
+        }
+        else if (isVolumeToast || isBrightnessToast)
         {
             hoverWidth = 290;
         }
@@ -182,9 +188,13 @@ public sealed class MonitorService
             hoverWidth = 275; // minimal clock, date & network badge capsule
         }
 
-        if (hasBluetoothBattery && !isVolumeToast && !isPowerToast)
+        if (hasBluetoothBattery && !isVolumeToast && !isPowerToast && !isBrightnessToast)
         {
             hoverWidth += 54;
+        }
+        if (hasUpcomingReminder && !isMediaPlaying && !isStopwatchRunning && !isVolumeToast && !isPowerToast && !isBrightnessToast && !isMediaToast)
+        {
+            hoverWidth += 92;
         }
 
         int idleWidth = isDualActivity ? 230 : 164;

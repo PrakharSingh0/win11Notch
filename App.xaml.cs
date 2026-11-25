@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Shell;
 using Win11Notch.Core.Settings;
 using Win11Notch.Core.State;
 using Win11Notch.Core.Win32;
@@ -11,12 +12,31 @@ namespace Win11Notch;
 
 public partial class App : Application
 {
-    private static readonly string LogFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "debug_run.log");
+    private static readonly string LogDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Win11Notch",
+        "Logs");
+    private static readonly string LogFile      = Path.Combine(LogDir, "debug_run.log");
+    private static readonly string CrashLogFile = Path.Combine(LogDir, "crash.log");
+
+    static App()
+    {
+        try
+        {
+            Directory.CreateDirectory(LogDir);
+            if (File.Exists(LogFile) && new FileInfo(LogFile).Length > 512 * 1024)
+            {
+                File.WriteAllText(LogFile, string.Empty);
+            }
+        }
+        catch { }
+    }
 
     public static void Log(string message)
     {
         try
         {
+            Directory.CreateDirectory(LogDir);
             File.AppendAllText(LogFile, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
         }
         catch { }
@@ -30,6 +50,7 @@ public partial class App : Application
     private ResourceMonitorService?    _resourceMonitor;
     private IslandNotificationService? _islandNotifications;
     private PowerAwakeService?         _powerAwakeService;
+    private BrightnessService?         _brightnessService;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -38,19 +59,29 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (s, ev) =>
         {
             Log($"[CRASH] UnhandledException: {ev.ExceptionObject}");
-            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ev.ExceptionObject.ToString()); } catch { }
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                File.WriteAllText(CrashLogFile, ev.ExceptionObject.ToString());
+            }
+            catch { }
         };
         DispatcherUnhandledException += (s, ev) =>
         {
             Log($"[CRASH] DispatcherUnhandledException: {ev.Exception}");
-            try { File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"), ev.Exception.ToString()); } catch { }
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                File.WriteAllText(CrashLogFile, ev.Exception.ToString());
+            }
+            catch { }
             ev.Handled = true; // Prevent process abort on dispatcher exceptions
         };
 
         try
         {
             Log("Calling SingleInstanceGuard.TryAcquire()...");
-            if (!SingleInstanceGuard.TryAcquire())
+            if (!SingleInstanceGuard.TryAcquire(e.Args))
             {
                 Log("SingleInstanceGuard returned FALSE! Another instance is running. Terminating secondary process.");
                 Environment.Exit(0);
@@ -59,6 +90,7 @@ public partial class App : Application
             Log("SingleInstanceGuard acquired successfully.");
 
             base.OnStartup(e);
+            RegisterTaskbarJumpList();
 
             try
             {
@@ -101,6 +133,9 @@ public partial class App : Application
             _powerAwakeService    = new PowerAwakeService();
             var scratchpadService = new ScratchpadService();
             var calendarService   = new CalendarService();
+            var quickShareService = new QuickShareService();
+            _brightnessService = new BrightnessService(monitor);
+            var colorPickerService = new ColorPickerService();
 
             var notchVm = new NotchViewModel(
                 stateMachine,
@@ -114,7 +149,10 @@ public partial class App : Application
                 settings,
                 _powerAwakeService,
                 scratchpadService,
-                calendarService);
+                calendarService,
+                quickShareService,
+                _brightnessService,
+                colorPickerService);
 
             _islandNotifications = new IslandNotificationService(stateMachine, _mediaService, settings, notchVm);
             _audioHud            = new AudioHudService(stateMachine, _audioService, notchVm);
@@ -133,7 +171,8 @@ public partial class App : Application
                 fullscreenService,
                 shelfService,
                 settingsVm,
-                clipboardService);
+                clipboardService,
+                quickShareService);
 
             Log("Showing NotchWindow...");
             _notchWindow.Show();
@@ -143,12 +182,19 @@ public partial class App : Application
             _trayService = new TrayService(trayVm, _notchWindow, stateMachine, settings, monitor);
             _trayService.Initialize();
 
-            // Wire single-instance wakeup to immediately expand the notch
-            SingleInstanceGuard.StartWakeupListener(() =>
+            // Wire single-instance & JumpList actions (--toggle, --settings, --about)
+            void DispatchLaunchAction(string action)
             {
-                Dispatcher.InvokeAsync(() =>
+                if (action == "settings")
                 {
-                    Log("SingleInstanceGuard wakeup received! Expanding Notch.");
+                    _notchWindow?.ShowSettingsWindow(0);
+                }
+                else if (action == "about")
+                {
+                    _notchWindow?.ShowSettingsWindow(4);
+                }
+                else
+                {
                     if (stateMachine.State != NotchState.PeekExpanded)
                     {
                         stateMachine.Toggle();
@@ -156,15 +202,38 @@ public partial class App : Application
                     _notchWindow?.Show();
                     _notchWindow?.Activate();
                     _notchWindow?.Focus();
+                }
+            }
+
+            SingleInstanceGuard.StartWakeupListener(action =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    Log($"SingleInstanceGuard wakeup received (action={action}).");
+                    DispatchLaunchAction(action);
                 });
             });
+
+            if (e.Args.Length > 0)
+            {
+                var initialAction = SingleInstanceGuard.ParseActionFromArgs(e.Args);
+                if (initialAction is "settings" or "about" || e.Args.Any(a => a.Equals("--toggle", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _ = Dispatcher.InvokeAsync(() => DispatchLaunchAction(initialAction));
+                }
+            }
 
             Log("TrayService initialized. Win11Notch startup fully complete!");
         }
         catch (Exception ex)
         {
             Log($"[FATAL EXCEPTION in OnStartup]: {ex}");
-            try { File.WriteAllText("crash.log", ex.ToString()); } catch { }
+            try
+            {
+                Directory.CreateDirectory(LogDir);
+                File.WriteAllText(CrashLogFile, ex.ToString());
+            }
+            catch { }
             throw;
         }
     }
@@ -174,6 +243,7 @@ public partial class App : Application
         Log($"=== OnExit called: Application exiting (ExitCode={e.ApplicationExitCode}) ===");
         SingleInstanceGuard.Release();
         _trayService?.Dispose();
+        _brightnessService?.Dispose();
         _audioHud?.Dispose();
         _audioService?.Dispose();
         _islandNotifications?.Dispose();
@@ -181,5 +251,49 @@ public partial class App : Application
         _resourceMonitor?.Dispose();
         _powerAwakeService?.Dispose();
         base.OnExit(e);
+    }
+
+    private void RegisterTaskbarJumpList()
+    {
+        try
+        {
+            string? exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+
+            var jumpList = new JumpList();
+            jumpList.JumpItems.Add(new JumpTask
+            {
+                Title           = "Open / Toggle Notch Hub",
+                Description     = "Expand or collapse the Win11Notch hub",
+                ApplicationPath = exe,
+                Arguments       = "--toggle",
+                IconResourcePath = exe,
+                IconResourceIndex = 0
+            });
+            jumpList.JumpItems.Add(new JumpTask
+            {
+                Title           = "Settings",
+                Description     = "Open Win11Notch Settings",
+                ApplicationPath = exe,
+                Arguments       = "--settings",
+                IconResourcePath = exe,
+                IconResourceIndex = 0
+            });
+            jumpList.JumpItems.Add(new JumpTask
+            {
+                Title           = "About & License",
+                Description     = "View Win11Notch author, GitHub repo, and MIT license",
+                ApplicationPath = exe,
+                Arguments       = "--about",
+                IconResourcePath = exe,
+                IconResourceIndex = 0
+            });
+            JumpList.SetJumpList(this, jumpList);
+            jumpList.Apply();
+        }
+        catch (Exception ex)
+        {
+            Log($"JumpList warning: {ex.Message}");
+        }
     }
 }
