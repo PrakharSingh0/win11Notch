@@ -134,6 +134,7 @@ public partial class App : Application
             var scratchpadService = new ScratchpadService();
             var calendarService   = new CalendarService();
             var quickShareService = new QuickShareService();
+            var homeLayoutService = new HomeLayoutService();
             _brightnessService = new BrightnessService(monitor);
             var colorPickerService = new ColorPickerService();
 
@@ -151,6 +152,7 @@ public partial class App : Application
                 scratchpadService,
                 calendarService,
                 quickShareService,
+                homeLayoutService,
                 _brightnessService,
                 colorPickerService);
 

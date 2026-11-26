@@ -652,6 +652,16 @@ public partial class NotchWindow : Window
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
+            if (_vm.IsAddHomeWidgetOpen)
+            {
+                _vm.CloseAddHomeWidgetCommand.Execute(null);
+                return;
+            }
+            if (_vm.IsHomeEditMode)
+            {
+                _vm.ToggleHomeEditModeCommand.Execute(null);
+                return;
+            }
             _vm.CloseAllMenus();
             _sm.Collapse();
             return;
@@ -688,8 +698,10 @@ public partial class NotchWindow : Window
 
     private void OnWindowPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Allow in-place interactive controls (e.g. Play/Pause, Pause/Resume Timer) without forcing hub expansion
-        if (e.OriginalSource is DependencyObject d && FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(d) != null)
+        // Allow in-place interactive controls (e.g. Play/Pause, Resize Thumb, Action Buttons) without forcing hub expansion
+        if (e.OriginalSource is DependencyObject d &&
+            (FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(d) != null ||
+             FindVisualParent<System.Windows.Controls.Primitives.Thumb>(d) != null))
         {
             return;
         }
@@ -767,6 +779,139 @@ public partial class NotchWindow : Window
     {
         _vm.StepCalendarMinuteCommand.Execute(e.Delta > 0 ? 1 : -1);
         e.Handled = true;
+    }
+
+    // ── Home Bento Grid: Right-click edit, Corner Drag-Resize & Swap-Reorder ──
+
+    private HomeSlotItem? _resizingSlot;
+    private int           _resizeStartColSpan;
+    private int           _resizeStartRowSpan;
+    private Point         _resizeStartMouseInGrid;
+    private HomeSlotItem? _draggedHomeSlot;
+    private Point         _homeDragStartPoint;
+
+    private void OnHomeSlotRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_vm.IsHomeEditMode)
+        {
+            _vm.EnterHomeEditModeCommand.Execute(null);
+        }
+        e.Handled = true;
+    }
+
+    private void OnHomeSlotResizeStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e)
+    {
+        if (sender is not FrameworkElement el || el.Tag is not HomeSlotItem slot) return;
+
+        _resizingSlot           = slot;
+        _resizeStartColSpan     = slot.ColSpan;
+        _resizeStartRowSpan     = slot.RowSpan;
+        IInputElement gridRel   = (IInputElement?)HomeBentoItems ?? this;
+        _resizeStartMouseInGrid = Mouse.GetPosition(gridRel);
+        slot.IsPreviewResizing  = true;
+        _vm.HomeResizeStatusText = $"Resizing {slot.DisplayName} ({slot.SizeLabel})";
+        e.Handled = true;
+    }
+
+    private void OnHomeSlotResizeDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        if (_resizingSlot == null) return;
+
+        IInputElement gridRel = (IInputElement?)HomeBentoItems ?? this;
+        Point cur             = Mouse.GetPosition(gridRel);
+        double dx             = cur.X - _resizeStartMouseInGrid.X;
+        double dy             = cur.Y - _resizeStartMouseInGrid.Y;
+
+        double colStep = HomeBentoItems is { ActualWidth: > 200 }
+            ? Math.Max(110.0, HomeBentoItems.ActualWidth / 4.0)
+            : 158.0;
+        double rowStep = Win11Notch.Views.Controls.HomeGridHelper.UnitRowHeight;
+
+        int deltaCols = (int)Math.Round(dx / colStep);
+        int deltaRows = (int)Math.Round(dy / rowStep);
+
+        int nextCols = Math.Clamp(_resizeStartColSpan + deltaCols, 1, HomeLayoutService.GridColumns);
+        int nextRows = Math.Clamp(_resizeStartRowSpan + deltaRows, 1, HomeLayoutService.MaxRowSpan);
+
+        _vm.ResizeHomeSlot(_resizingSlot, nextCols, nextRows);
+        _vm.HomeResizeStatusText = $"{_resizingSlot.DisplayName} → {_resizingSlot.SizeLabel}";
+        e.Handled = true;
+    }
+
+    private void OnHomeSlotResizeCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        if (_resizingSlot != null)
+        {
+            _resizingSlot.IsPreviewResizing = false;
+            _resizingSlot = null;
+        }
+        _vm.HomeResizeStatusText = string.Empty;
+        e.Handled = true;
+    }
+
+    private void OnHomeSlotPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_vm.IsHomeEditMode || _resizingSlot != null) return;
+        if (e.OriginalSource is DependencyObject dep &&
+            (FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(dep) != null ||
+             FindVisualParent<System.Windows.Controls.Primitives.Thumb>(dep) != null))
+        {
+            return;
+        }
+
+        if (sender is FrameworkElement el && el.DataContext is HomeSlotItem slot)
+        {
+            _draggedHomeSlot    = slot;
+            _homeDragStartPoint = e.GetPosition(this);
+        }
+    }
+
+    private void OnHomeSlotPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_vm.IsHomeEditMode || _draggedHomeSlot == null || _resizingSlot != null) return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _draggedHomeSlot = null;
+            return;
+        }
+
+        Point pos = e.GetPosition(this);
+        if (Math.Abs(pos.X - _homeDragStartPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(pos.Y - _homeDragStartPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            var slot = _draggedHomeSlot;
+            _draggedHomeSlot = null;
+            if (sender is DependencyObject dragSource)
+            {
+                DragDrop.DoDragDrop(dragSource, slot, DragDropEffects.Move);
+            }
+        }
+    }
+
+    private void OnHomeSlotDragOver(object sender, DragEventArgs e)
+    {
+        if (!_vm.IsHomeEditMode || !e.Data.GetDataPresent(typeof(HomeSlotItem))) return;
+        e.Effects = DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void OnHomeSlotDrop(object sender, DragEventArgs e)
+    {
+        if (!_vm.IsHomeEditMode || e.Data.GetData(typeof(HomeSlotItem)) is not HomeSlotItem source) return;
+        if (sender is FrameworkElement el && el.DataContext is HomeSlotItem target && !ReferenceEquals(source, target))
+        {
+            _vm.SwapHomeSlots(source, target);
+            e.Handled = true;
+        }
+    }
+
+    private void OnCloseHomeGalleryBackdropClick(object sender, MouseButtonEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, sender))
+        {
+            _vm.CloseAddHomeWidgetCommand.Execute(null);
+            e.Handled = true;
+        }
     }
 
     // ── Mouse event bridge ───────────────────────────────────────────────────

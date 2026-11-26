@@ -41,6 +41,7 @@ public sealed partial class NotchViewModel : ObservableObject
     private readonly ScratchpadService _scratchpadService;
     private readonly CalendarService _calendarService;
     private readonly QuickShareService _quickShareService;
+    private readonly HomeLayoutService _homeLayoutService;
     private readonly BrightnessService _brightnessService;
     private readonly ColorPickerService _colorPickerService;
 
@@ -49,6 +50,7 @@ public sealed partial class NotchViewModel : ObservableObject
 
     public TimerService Timer => _timerService;
     public CalendarService Calendar => _calendarService;
+    public HomeLayoutService HomeLayout => _homeLayoutService;
 
     public const int TabHome      = 0;
     public const int TabMedia     = 1;
@@ -77,6 +79,11 @@ public sealed partial class NotchViewModel : ObservableObject
     [ObservableProperty] private string _homeTimerSummaryText = "25:00 ready";
     [ObservableProperty] private string _homeScratchpadPreviewText = "Quick Notes";
     public ObservableCollection<CalendarItem> HomeUpcomingItems { get; } = new();
+
+    // Editable Home Bento Grid state
+    [ObservableProperty] private bool   _isHomeEditMode;
+    [ObservableProperty] private bool   _isAddHomeWidgetOpen;
+    [ObservableProperty] private string _homeResizeStatusText = string.Empty;
 
     // Calendar quick composer & filter properties
     [ObservableProperty] private bool _isAddingCalendarEvent;
@@ -415,6 +422,12 @@ public sealed partial class NotchViewModel : ObservableObject
     {
         CloseAllMenus();
         UpdateSpectrumState();
+        if (value != TabHome)
+        {
+            IsHomeEditMode      = false;
+            IsAddHomeWidgetOpen = false;
+            HomeResizeStatusText = string.Empty;
+        }
         if (value == TabHome)
         {
             RefreshHomeDashboard();
@@ -428,10 +441,95 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand]
     private void NavigateToTab(object? tabParam)
     {
+        if (IsHomeEditMode) return;
         if (int.TryParse(tabParam?.ToString(), out int idx))
         {
             SelectedTabIndex = Math.Clamp(idx, TabHome, TabShare);
         }
+    }
+
+    [RelayCommand]
+    private void ToggleHomeEditMode()
+    {
+        IsHomeEditMode = !IsHomeEditMode;
+        if (!IsHomeEditMode)
+        {
+            IsAddHomeWidgetOpen  = false;
+            HomeResizeStatusText = string.Empty;
+        }
+    }
+
+    [RelayCommand]
+    private void EnterHomeEditMode()
+    {
+        SelectedTabIndex = TabHome;
+        IsHomeEditMode   = true;
+    }
+
+    [RelayCommand]
+    private void OpenAddHomeWidget()
+    {
+        IsHomeEditMode      = true;
+        IsAddHomeWidgetOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseAddHomeWidget() => IsAddHomeWidgetOpen = false;
+
+    [RelayCommand]
+    private void AddHomeSlot(object? param)
+    {
+        if (param is HomeWidgetCatalogItem catalogItem)
+        {
+            _homeLayoutService.AddSlot(catalogItem.Kind, catalogItem.DefaultColSpan, catalogItem.DefaultRowSpan);
+            return;
+        }
+
+        if (param is HomeWidgetKind kind)
+        {
+            _homeLayoutService.AddSlot(kind);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveHomeSlot(HomeSlotItem? slot)
+    {
+        if (slot != null) _homeLayoutService.RemoveSlot(slot);
+    }
+
+    [RelayCommand]
+    private void CycleHomeSlotSize(HomeSlotItem? slot)
+    {
+        if (slot != null) _homeLayoutService.CycleSlotSize(slot);
+    }
+
+    [RelayCommand]
+    private void MoveHomeSlotLeft(HomeSlotItem? slot)
+    {
+        if (slot != null) _homeLayoutService.MoveSlot(slot, -1);
+    }
+
+    [RelayCommand]
+    private void MoveHomeSlotRight(HomeSlotItem? slot)
+    {
+        if (slot != null) _homeLayoutService.MoveSlot(slot, +1);
+    }
+
+    [RelayCommand]
+    private void ResetHomeLayout()
+    {
+        _homeLayoutService.ResetToDefault();
+        HomeResizeStatusText = string.Empty;
+    }
+
+    public void ResizeHomeSlot(HomeSlotItem slot, int colSpan, int rowSpan)
+    {
+        _homeLayoutService.ResizeSlot(slot, colSpan, rowSpan);
+    }
+
+    public void SwapHomeSlots(HomeSlotItem source, HomeSlotItem target)
+    {
+        _homeLayoutService.SwapSlots(source, target);
     }
 
     public NotchViewModel(
@@ -448,6 +546,7 @@ public sealed partial class NotchViewModel : ObservableObject
         ScratchpadService scratchpadService,
         CalendarService calendarService,
         QuickShareService quickShareService,
+        HomeLayoutService homeLayoutService,
         BrightnessService brightnessService,
         ColorPickerService colorPickerService)
     {
@@ -464,6 +563,7 @@ public sealed partial class NotchViewModel : ObservableObject
         _scratchpadService = scratchpadService;
         _calendarService = calendarService;
         _quickShareService = quickShareService;
+        _homeLayoutService = homeLayoutService;
         _brightnessService = brightnessService;
         _colorPickerService = colorPickerService;
 
@@ -625,6 +725,9 @@ public sealed partial class NotchViewModel : ObservableObject
             if (state != NotchState.PeekExpanded)
             {
                 CloseAllMenus();
+                IsHomeEditMode = false;
+                IsAddHomeWidgetOpen = false;
+                HomeResizeStatusText = string.Empty;
                 IsFileDragOverlayVisible = false;
                 IsDropDockHovered = false;
                 IsDropShareHovered = false;
