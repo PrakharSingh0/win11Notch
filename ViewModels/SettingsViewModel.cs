@@ -17,12 +17,20 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly SettingsService _settingsService;
     private readonly StartupService  _startupService;
-    private readonly MonitorService  _monitorService = new();
+    private readonly MonitorService  _monitorService;
     private bool                      _isLoading;
 
     [ObservableProperty] private int    _selectedCategoryIndex        = 0;
 
-    [ObservableProperty] private string _dockEdge                     = "Top";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDockTop))]
+    [NotifyPropertyChangedFor(nameof(IsDockLeft))]
+    [NotifyPropertyChangedFor(nameof(IsDockRight))]
+    private string _dockEdge = "Top";
+
+    public bool IsDockTop   => DockEdge == "Top";
+    public bool IsDockLeft  => DockEdge == "Left";
+    public bool IsDockRight => DockEdge == "Right";
     [ObservableProperty] private int    _idleOpacityPercent            = 20;
     [ObservableProperty] private int    _acrylicTintPercent            = 70;
     [ObservableProperty] private int    _hoverDwellMs                 = 100;
@@ -65,10 +73,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public event Action? SettingsChanged;
 
-    public SettingsViewModel(SettingsService settingsService, StartupService startupService)
+    public SettingsViewModel(SettingsService settingsService, StartupService startupService, MonitorService? monitorService = null)
     {
         _settingsService = settingsService;
         _startupService  = startupService;
+        _monitorService  = monitorService ?? new MonitorService();
 
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         AppVersionText = ver != null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}" : "v1.0.0";
@@ -83,7 +92,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         SidebarGreetingText = GreetingHelper.GetGreeting(DateTime.Now).DisplayTitle;
     }
 
-    private void LoadFromSettings()
+    public void LoadFromSettings()
     {
         _isLoading = true;
         try
@@ -213,35 +222,56 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SelectDockEdge(string? edge)
+    {
+        if (edge is "Top" or "Left" or "Right")
+        {
+            DockEdge = edge;
+        }
+    }
+
+    [RelayCommand]
     private void ResetDefaults()
     {
-        DockEdge                     = "Top";
-        IdleOpacityPercent           = 20;
-        AcrylicTintPercent           = 70;
-        HoverDwellMs                 = 100;
-        ExitGraceMs                  = 300;
-        AutoExpandOnDrag             = true;
-        ShowMediaIslandNotifications = true;
-        ShowStartupGreeting          = true;
-        HotkeyPreset                 = "Alt+Space";
-        TargetMonitorIndex           = 0;
-        HandleWidth                  = 72;
-        HandleThickness              = 8;
-        HandleColor                  = "#E61A1C20";
-        BorderAnimationPreset        = "None";
-        DynamicContentSizing         = true;
-        HandleVisibilityMode         = "SmartDesktop";
-        ShowDesktopAmbientGlance     = true;
-        AlwaysShowHoverCapsule       = false;
-        DefaultFocusMinutes          = 25;
-        DefaultBreakMinutes          = 5;
-        DailyWaterTargetCups         = 8;
-        TimerSoundChimesEnabled      = true;
-        DualActivityEnabled          = true;
-        Use24HourClock               = false;
-        ReminderSoundChimesEnabled   = true;
-        DefaultReminderSnoozeMinutes = 10;
-        LaunchAtStartup              = false;
+        _isLoading = true;
+        try
+        {
+            DockEdge                     = "Top";
+            IdleOpacityPercent           = 20;
+            AcrylicTintPercent           = 70;
+            HoverDwellMs                 = 100;
+            ExitGraceMs                  = 300;
+            AutoExpandOnDrag             = true;
+            ShowMediaIslandNotifications = true;
+            ShowStartupGreeting          = true;
+            HotkeyPreset                 = "Alt+Space";
+            TargetMonitorIndex           = Monitors.FirstOrDefault(m => m.IsPrimary)?.Index
+                                           ?? Monitors.FirstOrDefault()?.Index
+                                           ?? 1;
+            HandleWidth                  = 72;
+            HandleThickness              = 8;
+            HandleColor                  = "#E61A1C20";
+            BorderAnimationPreset        = "None";
+            DynamicContentSizing         = true;
+            HandleVisibilityMode         = "SmartDesktop";
+            ShowDesktopAmbientGlance     = true;
+            AlwaysShowHoverCapsule       = false;
+            DefaultFocusMinutes          = 25;
+            DefaultBreakMinutes          = 5;
+            DailyWaterTargetCups         = 8;
+            TimerSoundChimesEnabled      = true;
+            DualActivityEnabled          = true;
+            Use24HourClock               = false;
+            ReminderSoundChimesEnabled   = true;
+            DefaultReminderSnoozeMinutes = 10;
+            LaunchAtStartup              = false;
+            _startupService.SetStartupEnabled(false);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+        ApplyAndSave();
     }
 
     [RelayCommand]

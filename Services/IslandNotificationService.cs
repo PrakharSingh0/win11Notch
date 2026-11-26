@@ -60,25 +60,27 @@ public sealed class IslandNotificationService : IDisposable
 
     private void ExecuteToast(int durationMs)
     {
-        // Only trigger toast banner if currently in Idle state
-        if (_stateMachine.State != NotchState.Idle) return;
+        if (_stateMachine.State is not (NotchState.Idle or NotchState.CollapsedHover)) return;
 
         _notchViewModel.IsMediaToastActive = true;
-        _stateMachine.ShowToastBanner();
-
-        _toastTimer?.Stop();
-        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(durationMs) };
-        _toastTimer.Tick += (_, _) =>
+        if (_stateMachine.State == NotchState.Idle)
         {
-            _toastTimer!.Stop();
-            _notchViewModel.IsMediaToastActive = false;
+            _stateMachine.ShowToastBanner();
+        }
 
-            // If the user hasn't clicked into Peek or hovered over it, collapse back to Idle
-            if (_stateMachine.State == NotchState.CollapsedHover)
+        if (_toastTimer == null)
+        {
+            _toastTimer = new DispatcherTimer();
+            _toastTimer.Tick += (_, _) =>
             {
-                _stateMachine.Collapse();
-            }
-        };
+                _toastTimer!.Stop();
+                _notchViewModel.IsMediaToastActive = false;
+                _stateMachine.DismissToastBanner();
+            };
+        }
+
+        _toastTimer.Stop();
+        _toastTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(500, durationMs));
         _toastTimer.Start();
     }
 

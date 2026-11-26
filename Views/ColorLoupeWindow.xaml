@@ -29,8 +29,11 @@
                                    RenderOptions.BitmapScalingMode="NearestNeighbor"
                                    Stretch="Fill"/>
                             <!-- Center Target Reticle (9x9px single zoomed pixel outline) -->
-                            <Border Width="9" Height="9" BorderBrush="#FFFFFFFF" BorderThickness="1.2"
+                            <Border x:Name="ReticleBox" Width="9" Height="9" BorderBrush="#FFFFFFFF" BorderThickness="1.2"
                                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="ReticleShift"/>
+                                </Border.RenderTransform>
                                 <Border BorderBrush="#90000000" BorderThickness="0.8"/>
                             </Border>
                         </Grid>

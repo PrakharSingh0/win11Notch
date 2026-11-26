@@ -172,11 +172,12 @@ public sealed class ClipboardService : IDisposable
     {
         try
         {
+            using var ms = new MemoryStream(pngBytes);
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.DecodePixelWidth = 72;
-            bmp.StreamSource = new MemoryStream(pngBytes);
+            bmp.StreamSource = ms;
             bmp.EndInit();
             bmp.Freeze();
             return bmp;
@@ -194,10 +195,11 @@ public sealed class ClipboardService : IDisposable
             if (item.IsImage && item.ImagePngBytes != null)
             {
                 _lastImageHash = item.ImageHash;
+                using var ms = new MemoryStream(item.ImagePngBytes);
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.StreamSource = new MemoryStream(item.ImagePngBytes);
+                bmp.StreamSource = ms;
                 bmp.EndInit();
                 bmp.Freeze();
                 Clipboard.SetImage(bmp);

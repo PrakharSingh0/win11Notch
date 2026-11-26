@@ -16,6 +16,7 @@ public sealed class AudioHudService : IDisposable
     private readonly NotchViewModel    _notchViewModel;
 
     private DispatcherTimer? _hudTimer;
+    private bool             _collapseOnTimeout;
 
     public AudioHudService(
         NotchStateMachine stateMachine,
@@ -37,38 +38,39 @@ public sealed class AudioHudService : IDisposable
         // If change was initiated by the notch app slider itself, do NOT pop up HUD toast
         if (isSelfTriggered) return;
 
-        // Pop up Dynamic Island Volume HUD for external/hardware volume events
+        // Pop up Dynamic Island Volume HUD cleanly without leaving hover stuck after rapid presses
         if (_stateMachine.State == NotchState.Idle)
         {
+            _collapseOnTimeout = true;
             _notchViewModel.IsVolumeToastActive = true;
             _stateMachine.ShowToastBanner();
-
-            _hudTimer?.Stop();
-            _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-            _hudTimer.Tick += (_, _) =>
-            {
-                _hudTimer!.Stop();
-                _notchViewModel.IsVolumeToastActive = false;
-
-                if (_stateMachine.State == NotchState.CollapsedHover)
-                {
-                    _stateMachine.Collapse();
-                }
-            };
-            _hudTimer.Start();
         }
         else if (_stateMachine.State == NotchState.CollapsedHover)
         {
             _notchViewModel.IsVolumeToastActive = true;
-            _hudTimer?.Stop();
+        }
+        else
+        {
+            return;
+        }
+
+        if (_hudTimer == null)
+        {
             _hudTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
             _hudTimer.Tick += (_, _) =>
             {
                 _hudTimer!.Stop();
                 _notchViewModel.IsVolumeToastActive = false;
+                if (_collapseOnTimeout)
+                {
+                    _collapseOnTimeout = false;
+                    _stateMachine.DismissToastBanner();
+                }
             };
-            _hudTimer.Start();
         }
+
+        _hudTimer.Stop();
+        _hudTimer.Start();
     }
 
     public void Dispose()

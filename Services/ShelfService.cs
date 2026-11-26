@@ -21,7 +21,7 @@ public sealed class ShelfItem
     {
         bool isDir = Directory.Exists(path);
         string name = isDir ? new DirectoryInfo(path).Name : Path.GetFileName(path);
-        string size = isDir ? "Folder" : (File.Exists(path) ? FormatBytes(new FileInfo(path).Length) : "0 B");
+        string size = isDir ? "Folder" : (File.Exists(path) ? Models.ShareQueueItem.FormatBytes(new FileInfo(path).Length) : "0 B");
         string badge = isDir ? "DIR" : Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
         if (string.IsNullOrEmpty(badge)) badge = "FILE";
 
@@ -72,19 +72,6 @@ public sealed class ShelfItem
             IsDirectory   = isDir,
             TypeBadge     = badge
         };
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-        int counter = 0;
-        decimal number = bytes;
-        while (Math.Round(number / 1024) >= 1)
-        {
-            number /= 1024;
-            counter++;
-        }
-        return $"{number:n1} {suffixes[counter]}";
     }
 }
 
@@ -167,10 +154,18 @@ public sealed class ShelfService
         catch { /* best effort */ }
     }
 
-    public void CopyPathsToClipboard()
+    public bool CopyPathsToClipboard()
     {
-        if (Items.Count == 0) return;
-        var paths = Items.Select(i => i.FilePath);
-        Clipboard.SetText(string.Join(Environment.NewLine, paths));
+        if (Items.Count == 0) return false;
+        try
+        {
+            var paths = Items.Select(i => i.FilePath);
+            Clipboard.SetText(string.Join(Environment.NewLine, paths));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

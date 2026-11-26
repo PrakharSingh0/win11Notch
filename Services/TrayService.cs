@@ -73,29 +73,33 @@ public sealed class TrayService : IDisposable
     [DllImport("uxtheme.dll", EntryPoint = "#136")]
     private static extern void FlushMenuThemes();
 
-    private readonly TrayViewModel     _vm;
-    private readonly NotchWindow       _window;
-    private readonly NotchStateMachine _stateMachine;
-    private readonly SettingsService   _settings;
-    private readonly MonitorService    _monitor;
+    private readonly TrayViewModel      _vm;
+    private readonly NotchWindow        _window;
+    private readonly NotchStateMachine  _stateMachine;
+    private readonly SettingsService    _settings;
+    private readonly MonitorService     _monitor;
+    private readonly SettingsViewModel? _settingsVm;
 
     private NotifyIcon?      _notifyIcon;
     private HwndSource?      _menuOwnerHwnd;
     private DispatcherTimer? _rightClickReleaseTimer;
     private bool             _isMenuOpen;
+    private bool             _disposed;
 
     public TrayService(
-        TrayViewModel     vm,
-        NotchWindow       window,
-        NotchStateMachine stateMachine,
-        SettingsService   settings,
-        MonitorService    monitor)
+        TrayViewModel      vm,
+        NotchWindow        window,
+        NotchStateMachine  stateMachine,
+        SettingsService    settings,
+        MonitorService     monitor,
+        SettingsViewModel? settingsVm = null)
     {
         _vm           = vm;
         _window       = window;
         _stateMachine = stateMachine;
         _settings     = settings;
         _monitor      = monitor;
+        _settingsVm   = settingsVm;
     }
 
     public void Initialize()
@@ -124,14 +128,30 @@ public sealed class TrayService : IDisposable
         };
 
 #pragma warning disable CS8622
-        _notifyIcon.LeftClick  += (_, _) => _stateMachine.Toggle();
-        _notifyIcon.RightClick += (_, _) => ScheduleNativeTrayMenu();
+        _notifyIcon.LeftClick  += OnTrayLeftClick;
+        _notifyIcon.RightClick += OnTrayRightClick;
 #pragma warning restore CS8622
 
-        _vm.DockEdgeChanged += (_, _) => RepositionWindow();
-        _vm.ConfigReloaded  += (_, _) => RepositionWindow();
+        _vm.DockEdgeChanged += OnVmDockEdgeChanged;
+        _vm.ConfigReloaded  += OnVmConfigReloaded;
 
         _notifyIcon.Register();
+    }
+
+    private void OnTrayLeftClick(NotifyIcon sender, RoutedEventArgs e) => _stateMachine.Toggle();
+
+    private void OnTrayRightClick(NotifyIcon sender, RoutedEventArgs e) => ScheduleNativeTrayMenu();
+
+    private void OnVmDockEdgeChanged(object? sender, string e)
+    {
+        _settingsVm?.LoadFromSettings();
+        RepositionWindow();
+    }
+
+    private void OnVmConfigReloaded(object? sender, EventArgs e)
+    {
+        _settingsVm?.LoadFromSettings();
+        RepositionWindow();
     }
 
     private void ScheduleNativeTrayMenu()
@@ -164,7 +184,14 @@ public sealed class TrayService : IDisposable
         if (_isMenuOpen || _menuOwnerHwnd == null || _menuOwnerHwnd.Handle == IntPtr.Zero) return;
 
         _isMenuOpen = true;
-        IntPtr hMenu = CreatePopupMenu();
+        IntPtr hMenu    = CreatePopupMenu();
+        IntPtr hContext = IntPtr.Zero;
+        IntPtr hDock    = IntPtr.Zero;
+        IntPtr hMon     = IntPtr.Zero;
+        bool hContextAttached = false;
+        bool hDockAttached    = false;
+        bool hMonAttached     = false;
+
         if (hMenu == IntPtr.Zero)
         {
             _isMenuOpen = false;
@@ -185,7 +212,8 @@ public sealed class TrayService : IDisposable
             }
 
             // Main actions
-            AddCommand(hMenu, "Open / Toggle Hub (Alt+Space)", () => _vm.TogglePeekCommand.Execute(null));
+            string hotkey = string.IsNullOrWhiteSpace(_settings.Current.HotkeyPreset) ? "Alt+Space" : _settings.Current.HotkeyPreset;
+            AddCommand(hMenu, $"Open / Toggle Hub ({hotkey})", () => _vm.TogglePeekCommand.Execute(null));
             AddCommand(hMenu, "Always Show Hover Capsule", ToggleAlwaysHover, _settings.Current.AlwaysShowHoverCapsule);
             AddCommand(hMenu, "Hide Notch Handle (Stealth)", () => _stateMachine.SetManualStealth(!_stateMachine.IsManualStealth), _stateMachine.IsManualStealth);
             AddCommand(hMenu, "Show Greeting Banner", () => _window.TriggerGreetingBanner(durationMs: 3600, ignoreActiveCheck: true));
@@ -193,31 +221,42 @@ public sealed class TrayService : IDisposable
             AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, null);
 
             // Handle Context submenu
-            IntPtr hContext = CreatePopupMenu();
-            string curMode = _settings.Current.HandleVisibilityMode;
-            AddCommand(hContext, "Smart Desktop (Pill in Apps)", () => SelectContextMode("SmartDesktop"), curMode == "SmartDesktop");
-            AddCommand(hContext, "Desktop Only (Hide in Apps)", () => SelectContextMode("DesktopOnly"), curMode == "DesktopOnly");
-            AddCommand(hContext, "Always Show Live Preview", () => SelectContextMode("AlwaysLive"), curMode == "AlwaysLive");
-            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hContext.ToInt64(), "Handle Context");
+            hContext = CreatePopupMenu();
+            if (hContext != IntPtr.Zero)
+            {
+                string curMode = _settings.Current.HandleVisibilityMode;
+                AddCommand(hContext, "Smart Desktop (Pill in Apps)", () => SelectContextMode("SmartDesktop"), curMode == "SmartDesktop");
+                AddCommand(hContext, "Desktop Only (Hide in Apps)", () => SelectContextMode("DesktopOnly"), curMode == "DesktopOnly");
+                AddCommand(hContext, "Always Show Live Preview", () => SelectContextMode("AlwaysLive"), curMode == "AlwaysLive");
+                hContextAttached = AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hContext.ToInt64(), "Handle Context");
+            }
 
             // Dock Edge submenu
-            IntPtr hDock = CreatePopupMenu();
-            string curEdge = _settings.Current.DockEdge;
-            AddCommand(hDock, "Top Edge", () => DockAndReposition("Top"), curEdge == "Top");
-            AddCommand(hDock, "Left Edge", () => DockAndReposition("Left"), curEdge == "Left");
-            AddCommand(hDock, "Right Edge", () => DockAndReposition("Right"), curEdge == "Right");
-            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hDock.ToInt64(), "Dock Edge");
+            hDock = CreatePopupMenu();
+            if (hDock != IntPtr.Zero)
+            {
+                string curEdge = _settings.Current.DockEdge;
+                AddCommand(hDock, "Top Edge", () => DockAndReposition("Top"), curEdge == "Top");
+                AddCommand(hDock, "Left Edge", () => DockAndReposition("Left"), curEdge == "Left");
+                AddCommand(hDock, "Right Edge", () => DockAndReposition("Right"), curEdge == "Right");
+                hDockAttached = AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hDock.ToInt64(), "Dock Edge");
+            }
 
             // Target Monitor submenu
-            IntPtr hMon = CreatePopupMenu();
-            int curMon = _settings.Current.TargetMonitorIndex;
-            AddCommand(hMon, "Primary Monitor (Default)", () => SelectMonitor(0), curMon == 0);
-            foreach (var m in _monitor.GetMonitors())
+            hMon = CreatePopupMenu();
+            if (hMon != IntPtr.Zero)
             {
-                int idx = m.Index;
-                AddCommand(hMon, m.Name, () => SelectMonitor(idx), curMon == idx);
+                var monitors = _monitor.GetMonitors();
+                int curMon = _settings.Current.TargetMonitorIndex;
+                int resolvedPrimary = monitors.FirstOrDefault(m => m.IsPrimary)?.Index ?? monitors.FirstOrDefault()?.Index ?? 1;
+                if (curMon <= 0) curMon = resolvedPrimary;
+                foreach (var m in monitors)
+                {
+                    int idx = m.Index;
+                    AddCommand(hMon, m.Name, () => SelectMonitor(idx), curMon == idx);
+                }
+                hMonAttached = AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hMon.ToInt64(), "Target Monitor");
             }
-            AppendMenu(hMenu, MF_POPUP, (UIntPtr)(ulong)hMon.ToInt64(), "Target Monitor");
 
             AppendMenu(hMenu, MF_SEPARATOR, UIntPtr.Zero, null);
 
@@ -248,6 +287,9 @@ public sealed class TrayService : IDisposable
         }
         finally
         {
+            if (!hContextAttached && hContext != IntPtr.Zero) DestroyMenu(hContext);
+            if (!hDockAttached && hDock != IntPtr.Zero) DestroyMenu(hDock);
+            if (!hMonAttached && hMon != IntPtr.Zero) DestroyMenu(hMon);
             DestroyMenu(hMenu);
             _isMenuOpen = false;
         }
@@ -257,6 +299,7 @@ public sealed class TrayService : IDisposable
     {
         _settings.Current.AlwaysShowHoverCapsule = !_settings.Current.AlwaysShowHoverCapsule;
         _ = _settings.SaveAsync();
+        _settingsVm?.LoadFromSettings();
         _window.ApplyContextModeFromTray();
     }
 
@@ -277,6 +320,7 @@ public sealed class TrayService : IDisposable
     {
         _settings.Current.DockEdge = edge;
         _ = _settings.SaveAsync();
+        _settingsVm?.LoadFromSettings();
         RepositionWindow();
     }
 
@@ -284,6 +328,7 @@ public sealed class TrayService : IDisposable
     {
         _settings.Current.TargetMonitorIndex = index;
         _ = _settings.SaveAsync();
+        _settingsVm?.LoadFromSettings();
         RepositionWindow();
     }
 
@@ -291,6 +336,7 @@ public sealed class TrayService : IDisposable
     {
         _settings.Current.HandleVisibilityMode = mode;
         _ = _settings.SaveAsync();
+        _settingsVm?.LoadFromSettings();
         _window.ApplyContextModeFromTray();
     }
 
@@ -336,8 +382,24 @@ public sealed class TrayService : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+
+        _vm.DockEdgeChanged -= OnVmDockEdgeChanged;
+        _vm.ConfigReloaded  -= OnVmConfigReloaded;
+
+        if (_notifyIcon != null)
+        {
+#pragma warning disable CS8622
+            _notifyIcon.LeftClick  -= OnTrayLeftClick;
+            _notifyIcon.RightClick -= OnTrayRightClick;
+#pragma warning restore CS8622
+            _notifyIcon.Unregister();
+            _notifyIcon = null;
+        }
+
         _rightClickReleaseTimer?.Stop();
-        _notifyIcon?.Unregister();
+        _rightClickReleaseTimer = null;
         _menuOwnerHwnd?.Dispose();
         _menuOwnerHwnd = null;
     }

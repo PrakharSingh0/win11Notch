@@ -119,8 +119,6 @@ public sealed partial class HomeLayoutService : ObservableObject
     [ObservableProperty]
     private int _totalRows = 2;
 
-    public event Action? LayoutChanged;
-
     public HomeLayoutService()
     {
         var dir = Path.Combine(
@@ -164,7 +162,7 @@ public sealed partial class HomeLayoutService : ObservableObject
         }
     }
 
-    public void ResizeSlot(HomeSlotItem slot, int colSpan, int rowSpan)
+    public void ResizeSlot(HomeSlotItem slot, int colSpan, int rowSpan, bool save = true)
     {
         int cols = Math.Clamp(colSpan, 1, GridColumns);
         int rows = Math.Clamp(rowSpan, 1, MaxRowSpan);
@@ -172,8 +170,10 @@ public sealed partial class HomeLayoutService : ObservableObject
 
         slot.ColSpan = cols;
         slot.RowSpan = rows;
-        RepackLayout(save: true);
+        RepackLayout(save: save);
     }
+
+    public void CommitLayout() => Save();
 
     public void CycleSlotSize(HomeSlotItem slot)
     {
@@ -329,7 +329,6 @@ public sealed partial class HomeLayoutService : ObservableObject
         RefreshCatalogCounts();
 
         if (save) Save();
-        LayoutChanged?.Invoke();
     }
 
     private static (int Row, int Col) FindFirstFreeCell(List<bool[]> occupied, int colSpan, int rowSpan)

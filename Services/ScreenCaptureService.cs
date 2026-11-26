@@ -60,7 +60,7 @@ public sealed class ScreenCaptureService
             int width  = target is { PhysWidth:  > 0 } ? target.PhysWidth  : GetSystemMetrics(SM_CXSCREEN);
             int height = target is { PhysHeight: > 0 } ? target.PhysHeight : GetSystemMetrics(SM_CYSCREEN);
 
-            string fileName = $"Snip_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+            string fileName = $"Snip_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
             string filePath = Path.Combine(_screenshotsFolder, fileName);
 
             using (var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb))

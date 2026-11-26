@@ -398,11 +398,12 @@ public sealed class MediaService : IDisposable
                     {
                         try
                         {
+                            using var imgMs = new MemoryStream(bytes);
                             var bitmap = new BitmapImage();
                             bitmap.BeginInit();
                             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
                             bitmap.CacheOption   = BitmapCacheOption.OnLoad;
-                            bitmap.StreamSource  = new MemoryStream(bytes);
+                            bitmap.StreamSource  = imgMs;
                             bitmap.EndInit();
                             bitmap.Freeze();
                             return (ImageSource)bitmap;
@@ -419,20 +420,24 @@ public sealed class MediaService : IDisposable
         return null;
     }
 
-    private static async Task<Color> ExtractAccentSafeAsync(ImageSource? thumb, string title, string artist)
+    private static Task<Color> ExtractAccentSafeAsync(ImageSource? thumb, string title, string artist)
     {
-        if (thumb is BitmapSource bmp && Application.Current?.Dispatcher != null)
+        if (thumb is BitmapSource bmp)
         {
             try
             {
-                return await Application.Current.Dispatcher.InvokeAsync(() => ExtractVibrantAccent(bmp));
+                if (bmp.IsFrozen) return Task.FromResult(ExtractVibrantAccent(bmp));
+                if (Application.Current?.Dispatcher != null)
+                {
+                    return Application.Current.Dispatcher.InvokeAsync(() => ExtractVibrantAccent(bmp)).Task;
+                }
             }
             catch { }
         }
 
         // Match deterministic fallback gradient highlight
         int hash = Math.Abs((title + artist).GetHashCode());
-        return (hash % 6) switch
+        var fallback = (hash % 6) switch
         {
             0 => Color.FromRgb(0xE9, 0x40, 0x57),
             1 => Color.FromRgb(0x00, 0xDF, 0xD8),
@@ -441,6 +446,7 @@ public sealed class MediaService : IDisposable
             4 => Color.FromRgb(0xFF, 0x58, 0x58),
             _ => Color.FromRgb(0x8F, 0x94, 0xFB)
         };
+        return Task.FromResult(fallback);
     }
 
     private static Color ExtractVibrantAccent(BitmapSource bmp)

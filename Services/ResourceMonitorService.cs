@@ -141,46 +141,61 @@ public sealed class ResourceMonitorService : IDisposable
     public List<double> DownloadHistory { get; } = new();
     public List<double> UploadHistory   { get; } = new();
 
+    private readonly object _lifecycleLock = new();
+    private volatile bool   _disposed;
+    public volatile bool    CollectExtendedDetails = true;
+
     public event Action? StatsUpdated;
 
     public void StartMonitoring()
     {
-        if (_cts != null) return;
-
-        _cts = new CancellationTokenSource();
-        var token = _cts.Token;
-        _ = Task.Run(() => MonitorLoopAsync(token), token);
+        lock (_lifecycleLock)
+        {
+            if (_disposed || _cts != null) return;
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+            _ = Task.Run(() => MonitorLoopAsync(token), token);
+        }
     }
 
     public void StopMonitoring()
     {
-        try
+        lock (_lifecycleLock)
         {
-            _cts?.Cancel();
-            _cts?.Dispose();
-        }
-        catch { }
-        finally
-        {
-            _cts = null;
+            try
+            {
+                _cts?.Cancel();
+                _cts?.Dispose();
+            }
+            catch { }
+            finally
+            {
+                _cts = null;
+            }
         }
     }
 
     private async Task MonitorLoopAsync(CancellationToken token)
     {
-        // Safe lazy background initialization of performance counters
-        InitGpuCounters();
-        InitDiskCounter();
+        if (CollectExtendedDetails)
+        {
+            InitGpuCounters();
+            InitDiskCounter();
+        }
 
-        // Initial sample immediately
         CollectAndDispatchStats();
 
-        while (!token.IsCancellationRequested)
+        while (!token.IsCancellationRequested && !_disposed)
         {
             try
             {
                 await Task.Delay(1000, token);
-                if (token.IsCancellationRequested) break;
+                if (token.IsCancellationRequested || _disposed) break;
+                if (CollectExtendedDetails && (_gpuSlots.Count == 0 || _diskCounter == null))
+                {
+                    InitGpuCounters();
+                    InitDiskCounter();
+                }
                 CollectAndDispatchStats();
             }
             catch (OperationCanceledException)
@@ -609,9 +624,13 @@ public sealed class ResourceMonitorService : IDisposable
                     if (nic.OperationalStatus == OperationalStatus.Up &&
                         nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                     {
-                        var s = nic.GetIPv4Statistics();
-                        currentRecv += s.BytesReceived;
-                        currentSent += s.BytesSent;
+                        try
+                        {
+                            var s = nic.GetIPv4Statistics();
+                            currentRecv += s.BytesReceived;
+                            currentSent += s.BytesSent;
+                        }
+                        catch { continue; }
 
                         if (activeNic == null || nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
                         {
@@ -820,25 +839,29 @@ public sealed class ResourceMonitorService : IDisposable
 
     public void Dispose()
     {
-        StopMonitoring();
-        foreach (var slot in _gpuSlots)
+        lock (_lifecycleLock)
         {
-            foreach (var c in slot.EngineCounters) { try { c.Dispose(); } catch { } }
-            slot.EngineCounters.Clear();
-            try { slot.DedicatedVramCounter?.Dispose(); } catch { }
-            try { slot.SharedVramCounter?.Dispose(); } catch { }
+            _disposed = true;
+            StopMonitoring();
+            foreach (var slot in _gpuSlots)
+            {
+                foreach (var c in slot.EngineCounters) { try { c.Dispose(); } catch { } }
+                slot.EngineCounters.Clear();
+                try { slot.DedicatedVramCounter?.Dispose(); } catch { }
+                try { slot.SharedVramCounter?.Dispose(); } catch { }
+            }
+            _gpuSlots.Clear();
+            if (_gpuCounters != null)
+            {
+                foreach (var c in _gpuCounters) { try { c.Dispose(); } catch { } }
+                _gpuCounters.Clear();
+            }
+            if (_vramCounters != null)
+            {
+                foreach (var c in _vramCounters) { try { c.Dispose(); } catch { } }
+                _vramCounters.Clear();
+            }
+            try { _diskCounter?.Dispose(); } catch { }
         }
-        _gpuSlots.Clear();
-        if (_gpuCounters != null)
-        {
-            foreach (var c in _gpuCounters) { try { c.Dispose(); } catch { } }
-            _gpuCounters.Clear();
-        }
-        if (_vramCounters != null)
-        {
-            foreach (var c in _vramCounters) { try { c.Dispose(); } catch { } }
-            _vramCounters.Clear();
-        }
-        try { _diskCounter?.Dispose(); } catch { }
     }
 }

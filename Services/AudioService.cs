@@ -250,14 +250,15 @@ public sealed class AudioService : IDisposable
     }
 
     private int _cachedBtBattery = -1;
-    private bool _isQueryingBtBattery;
+    private int _btScanFlag;
+    private volatile bool _disposed;
     private DateTime _lastBtCheck = DateTime.MinValue;
     private readonly ConcurrentDictionary<Guid, int> _btBatteryByContainer = new();
     private readonly ConcurrentDictionary<string, int> _btBatteryByName = new(StringComparer.OrdinalIgnoreCase);
 
     public void RefreshActiveDevice()
     {
-        if (_cachedEndpoint == null)
+        if (!_disposed && _cachedEndpoint == null)
         {
             InitEndpoint();
         }
@@ -265,9 +266,13 @@ public sealed class AudioService : IDisposable
 
     private void OnDefaultPlaybackDeviceChanged()
     {
+        if (_disposed) return;
         if (Application.Current?.Dispatcher != null)
         {
-            Application.Current.Dispatcher.InvokeAsync(InitEndpoint);
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (!_disposed) InitEndpoint();
+            });
         }
         else
         {
@@ -279,21 +284,29 @@ public sealed class AudioService : IDisposable
     {
         lock (_syncLock)
         {
+            if (_disposed) return;
+            IMMDevice? device = null;
             try
             {
-                // Clean up previous endpoint callback
-                if (_cachedEndpoint != null && _callbackHandler != null)
+                if (_cachedEndpoint != null)
                 {
-                    try { _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler); } catch { }
+                    if (_callbackHandler != null)
+                    {
+                        try { _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler); } catch { }
+                    }
+                    ReleaseComSafe(_cachedEndpoint);
                     _cachedEndpoint = null;
                 }
-                _cachedMeter = null;
+                if (_cachedMeter != null)
+                {
+                    ReleaseComSafe(_cachedMeter);
+                    _cachedMeter = null;
+                }
 
                 _deviceEnumerator ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
 
-                if (_deviceEnumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out var device) == 0 && device != null)
+                if (_deviceEnumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out device) == 0 && device != null)
                 {
-                    // Query friendly device name & hardware container ID
                     string detectedName = QueryFriendlyName(device);
                     Guid detectedCid = QueryContainerId(device);
                     ActiveDeviceContainerId = detectedCid;
@@ -311,14 +324,12 @@ public sealed class AudioService : IDisposable
                         }
                     }
 
-                    // Activate endpoint volume
                     var iid = typeof(IAudioEndpointVolume).GUID;
                     if (device.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out var epvObj) == 0 && epvObj != null)
                     {
                         _cachedEndpoint = (IAudioEndpointVolume)epvObj;
                         _cachedEndpoint.RegisterControlChangeNotify(_callbackHandler!);
 
-                        // Trigger initial volume sync
                         if (_cachedEndpoint.GetMasterVolumeLevelScalar(out float vol) == 0)
                         {
                             bool muted = GetMute();
@@ -326,7 +337,6 @@ public sealed class AudioService : IDisposable
                         }
                     }
 
-                    // Activate endpoint peak meter for active spectrum visualization
                     try
                     {
                         var meterIid = typeof(IAudioMeterInformation).GUID;
@@ -339,14 +349,19 @@ public sealed class AudioService : IDisposable
                 }
             }
             catch { /* audio device might be absent/disabled */ }
+            finally
+            {
+                ReleaseComSafe(device);
+            }
         }
     }
 
     private static string QueryFriendlyName(IMMDevice device)
     {
+        IPropertyStore? store = null;
         try
         {
-            if (device.OpenPropertyStore(0 /* STGM_READ */, out var store) == 0 && store != null)
+            if (device.OpenPropertyStore(0 /* STGM_READ */, out store) == 0 && store != null)
             {
                 var candidates = new[]
                 {
@@ -378,15 +393,20 @@ public sealed class AudioService : IDisposable
             }
         }
         catch { /* fallback */ }
+        finally
+        {
+            ReleaseComSafe(store);
+        }
 
         return "Default Playback Device";
     }
 
     private static Guid QueryContainerId(IMMDevice device)
     {
+        IPropertyStore? store = null;
         try
         {
-            if (device.OpenPropertyStore(0 /* STGM_READ */, out var store) == 0 && store != null)
+            if (device.OpenPropertyStore(0 /* STGM_READ */, out store) == 0 && store != null)
             {
                 var k = new PropertyKey { fmtid = PKEY_Device_ContainerId_Guid, pid = PKEY_Device_ContainerId_Pid };
                 var pv = new PropVariant();
@@ -404,6 +424,10 @@ public sealed class AudioService : IDisposable
             }
         }
         catch { /* fallback */ }
+        finally
+        {
+            ReleaseComSafe(store);
+        }
 
         return Guid.Empty;
     }
@@ -474,25 +498,29 @@ public sealed class AudioService : IDisposable
         var result = new List<AudioDeviceItem>();
         lock (_syncLock)
         {
+            if (_disposed) return result;
+            IMMDevice? defaultDev = null;
+            IMMDeviceCollection? collection = null;
             try
             {
                 _deviceEnumerator ??= (IMMDeviceEnumerator)new MMDeviceEnumeratorComObject();
 
                 string defaultId = string.Empty;
-                if (_deviceEnumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out var defaultDev) == 0 && defaultDev != null)
+                if (_deviceEnumerator.GetDefaultAudioEndpoint(0 /* eRender */, 1 /* eMultimedia */, out defaultDev) == 0 && defaultDev != null)
                 {
                     defaultDev.GetId(out defaultId);
                 }
 
-                if (_deviceEnumerator.EnumAudioEndpoints(0 /* eRender */, 1 /* DEVICE_STATE_ACTIVE */, out var collection) == 0 && collection != null)
+                if (_deviceEnumerator.EnumAudioEndpoints(0 /* eRender */, 1 /* DEVICE_STATE_ACTIVE */, out collection) == 0 && collection != null)
                 {
                     if (collection.GetCount(out uint count) == 0)
                     {
                         for (uint i = 0; i < count; i++)
                         {
-                            if (collection.Item(i, out var dev) == 0 && dev != null)
+                            IMMDevice? dev = null;
+                            try
                             {
-                                if (dev.GetId(out string id) == 0)
+                                if (collection.Item(i, out dev) == 0 && dev != null && dev.GetId(out string id) == 0)
                                 {
                                     string name = QueryFriendlyName(dev);
                                     Guid cid = QueryContainerId(dev);
@@ -506,11 +534,20 @@ public sealed class AudioService : IDisposable
                                     });
                                 }
                             }
+                            finally
+                            {
+                                ReleaseComSafe(dev);
+                            }
                         }
                     }
                 }
             }
             catch { /* best effort */ }
+            finally
+            {
+                ReleaseComSafe(collection);
+                ReleaseComSafe(defaultDev);
+            }
         }
         TriggerBluetoothBatteryScanIfStale(force: false);
         return result;
@@ -518,10 +555,11 @@ public sealed class AudioService : IDisposable
 
     public bool SetDefaultPlaybackDevice(string deviceId)
     {
-        if (string.IsNullOrWhiteSpace(deviceId)) return false;
+        if (string.IsNullOrWhiteSpace(deviceId) || _disposed) return false;
+        IPolicyConfig? policyConfig = null;
         try
         {
-            var policyConfig = (IPolicyConfig)new PolicyConfigClient();
+            policyConfig = (IPolicyConfig)new PolicyConfigClient();
             policyConfig.SetDefaultEndpoint(deviceId, 0 /* eConsole */);
             policyConfig.SetDefaultEndpoint(deviceId, 1 /* eMultimedia */);
             policyConfig.SetDefaultEndpoint(deviceId, 2 /* eCommunications */);
@@ -531,6 +569,10 @@ public sealed class AudioService : IDisposable
         catch
         {
             return false;
+        }
+        finally
+        {
+            ReleaseComSafe(policyConfig);
         }
     }
 
@@ -615,12 +657,13 @@ public sealed class AudioService : IDisposable
 
     private void TriggerBluetoothBatteryScanIfStale(bool force)
     {
-        if ((!force && (DateTime.UtcNow - _lastBtCheck).TotalSeconds <= 10) || _isQueryingBtBattery)
-            return;
-
-        _isQueryingBtBattery = true;
-        _lastBtCheck = DateTime.UtcNow;
+        if (_disposed) return;
+        if (!force && (DateTime.UtcNow - _lastBtCheck).TotalSeconds <= 30) return;
         string currentAudioName = ActiveDeviceName;
+        if (!force && IsLikelyWiredOrDisplayAudio(currentAudioName)) return;
+        if (Interlocked.CompareExchange(ref _btScanFlag, 1, 0) != 0) return;
+
+        _lastBtCheck = DateTime.UtcNow;
         Guid currentContainerId = ActiveDeviceContainerId;
 
         _ = Task.Run(async () =>
@@ -727,11 +770,11 @@ public sealed class AudioService : IDisposable
                 _btBatteryByName.Clear();
                 foreach (var kv in scannedByName) _btBatteryByName[kv.Key] = kv.Value;
 
-                int resolved = GetBluetoothBatteryForDevice(currentContainerId, currentAudioName);
+                int resolved = GetBluetoothBatteryForDevice(ActiveDeviceContainerId, ActiveDeviceName);
                 bool activeChanged = _cachedBtBattery != resolved;
                 _cachedBtBattery = resolved;
 
-                if (activeChanged || cidChanged || nameChanged)
+                if ((activeChanged || cidChanged || nameChanged) && !_disposed)
                 {
                     if (Application.Current?.Dispatcher != null)
                     {
@@ -746,7 +789,7 @@ public sealed class AudioService : IDisposable
             catch { }
             finally
             {
-                _isQueryingBtBattery = false;
+                Interlocked.Exchange(ref _btScanFlag, 0);
             }
         });
     }
@@ -787,22 +830,43 @@ public sealed class AudioService : IDisposable
     {
         lock (_syncLock)
         {
+            _disposed = true;
             try
             {
-                _cachedMeter = null;
-                if (_cachedEndpoint != null && _callbackHandler != null)
+                if (_cachedMeter != null)
                 {
-                    _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler);
+                    ReleaseComSafe(_cachedMeter);
+                    _cachedMeter = null;
+                }
+                if (_cachedEndpoint != null)
+                {
+                    if (_callbackHandler != null)
+                    {
+                        _cachedEndpoint.UnregisterControlChangeNotify(_callbackHandler);
+                    }
+                    ReleaseComSafe(_cachedEndpoint);
                     _cachedEndpoint = null;
                 }
 
-                if (_deviceEnumerator != null && _notificationHandler != null)
+                if (_deviceEnumerator != null)
                 {
-                    _deviceEnumerator.UnregisterEndpointNotificationCallback(_notificationHandler);
+                    if (_notificationHandler != null)
+                    {
+                        _deviceEnumerator.UnregisterEndpointNotificationCallback(_notificationHandler);
+                    }
+                    ReleaseComSafe(_deviceEnumerator);
                     _deviceEnumerator = null;
                 }
             }
             catch { /* best effort */ }
+        }
+    }
+
+    private static void ReleaseComSafe(object? comObj)
+    {
+        if (comObj != null && Marshal.IsComObject(comObj))
+        {
+            try { Marshal.ReleaseComObject(comObj); } catch { }
         }
     }
 }

@@ -205,6 +205,9 @@
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="#34FFFFFF"/>
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.38"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -245,7 +248,7 @@
             </Setter>
         </Style>
 
-        <!-- Hero Coral-Orange Play/Pause Circle Button -->
+        <!-- Hero Accent Play/Pause Circle Button -->
         <Style x:Key="MediaHeroPlayBtn" TargetType="Button">
             <Setter Property="Background" Value="#FF5E36"/>
             <Setter Property="Foreground" Value="White"/>
@@ -258,15 +261,17 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="22">
+                        <Grid>
+                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="22"/>
+                            <Border x:Name="sheen" Background="#00FFFFFF" CornerRadius="22" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FF7350"/>
+                                <Setter TargetName="sheen" Property="Background" Value="#24FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E04820"/>
+                                <Setter TargetName="sheen" Property="Background" Value="#24000000"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -333,34 +338,6 @@
             </Setter>
         </Style>
 
-        <!-- Segmented Pill Radio Button (Shelf Files / Clipboard Sub-tabs) -->
-        <Style x:Key="SegmentedRadioPill" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="#9A9CA2"/>
-            <Setter Property="FontSize" Value="11.5"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="10,4">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#14FFFFFF"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#26FFFFFF"/>
-                                <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <!-- Frosted Top Dock TabControl & Segmented TabItem -->
         <Style x:Key="BentoTabControl" TargetType="TabControl">
             <Setter Property="Background" Value="Transparent"/>
@@ -382,7 +359,7 @@
                                     Padding="3"
                                     Margin="0,0,0,8"
                                     HorizontalAlignment="Center">
-                                <TabPanel x:Name="HeaderPanel" IsItemsHost="True"/>
+                                <StackPanel x:Name="HeaderPanel" Orientation="Horizontal" IsItemsHost="True"/>
                             </Border>
                             <ContentPresenter Grid.Row="1"
                                               x:Name="PART_SelectedContentHost"
@@ -877,9 +854,9 @@
                             </DockPanel>
                             <ProgressBar Style="{StaticResource MetricProgressBarStyle}" Height="3.5" Foreground="#B388FF" Value="{Binding DataContext.MemoryPercent, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}" Maximum="100" Margin="0,0,0,5"/>
 
-                            <DockPanel>
-                                <TextBlock Text="{Binding DataContext.DownloadSpeedText, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='↓ {0}'}" Foreground="#69F0AE" FontSize="9" FontWeight="Bold" DockPanel.Dock="Right"/>
-                                <TextBlock Text="{Binding DataContext.GpuPercent, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='GPU {0}%'}" Foreground="#00E5FF" FontSize="9" FontWeight="Bold"/>
+                            <DockPanel LastChildFill="True">
+                                <TextBlock Text="{Binding DataContext.DownloadSpeedText, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='↓ {0}'}" Foreground="#69F0AE" FontSize="8.5" FontWeight="Bold" DockPanel.Dock="Right" MaxWidth="62" TextTrimming="CharacterEllipsis" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding DataContext.GpuPercent, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='GPU {0}%'}" Foreground="#00E5FF" FontSize="9" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                             </DockPanel>
                         </StackPanel>
 
@@ -1076,11 +1053,34 @@
                     </DockPanel>
 
                     <UniformGrid Grid.Row="1" Columns="2" Rows="2" VerticalAlignment="Center">
-                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding DataContext.ToggleStayAwakeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                Background="#14FFFFFF" Margin="0,0,4,4" Padding="6,4" ToolTip="Toggle Stay Awake">
+                        <Button Command="{Binding DataContext.ToggleStayAwakeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                Margin="0,0,4,4" Padding="6,4" ToolTip="Toggle Stay Awake">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource NotchIconBtn}">
+                                    <Setter Property="Background" Value="#14FFFFFF"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.IsStayAwakeEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Background" Value="#2CFF5E36"/>
+                                            <Setter Property="BorderBrush" Value="#70FF5E36"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7E8;" Foreground="#FF5E36" FontSize="10" Margin="0,0,4,0"/>
-                                <TextBlock Text="Awake" Foreground="White" FontSize="9.5" FontWeight="SemiBold"/>
+                                <TextBlock FontSize="9.5" FontWeight="SemiBold" Foreground="White">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Awake"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsStayAwakeEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                    <Setter Property="Text" Value="Awake On"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource NotchIconBtn}" Command="{Binding DataContext.CaptureScreenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -2210,7 +2210,7 @@
 
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                                                 <Border Style="{StaticResource MicroPillBadge}" Padding="8,4" Margin="0,0,6,0">
-                                                    <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ToggleAudioDeviceMenuCommand}" Padding="0">
+                                                    <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ToggleAudioDeviceMenuCommand}" Padding="0" ToolTip="Switch Audio Output Device">
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                             <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7F6;" FontSize="11.5" Foreground="{Binding MediaAccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                             <TextBlock Text="{Binding ActiveAudioDeviceName}" FontSize="11" FontWeight="SemiBold" Foreground="White" MaxWidth="125" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
@@ -2239,13 +2239,26 @@
 
                                         <!-- Multi-Player Source Dropdown Menu -->
                                         <Border Grid.Row="0" Grid.RowSpan="4"
+                                                Tag="MenuPopup"
                                                 Visibility="{Binding IsMediaSourceMenuOpen, Converter={StaticResource BoolToVis}}"
                                                 Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="10"
-                                                Padding="5" Panel.ZIndex="22" VerticalAlignment="Top" HorizontalAlignment="Left"
-                                                Margin="150,32,0,0" MinWidth="175" MaxHeight="145">
+                                                Padding="5" Panel.ZIndex="22" VerticalAlignment="Top" HorizontalAlignment="Right"
+                                                Margin="0,32,0,0" MinWidth="185" MaxHeight="145">
                                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                                 <StackPanel>
                                                     <TextBlock Text="MEDIA PLAYER" Foreground="#65FFFFFF" FontSize="9.5" FontWeight="Bold" Margin="6,2,4,4"/>
+                                                    <TextBlock Text="No active players detected" Foreground="#70FFFFFF" FontSize="10.5" Margin="6,2,6,4">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding MediaSessions.Count}" Value="0">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <ItemsControl ItemsSource="{Binding MediaSessions}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
@@ -2269,6 +2282,7 @@
 
                                         <!-- Audio Device Dropdown Menu -->
                                         <Border Grid.Row="0" Grid.RowSpan="4"
+                                                Tag="MenuPopup"
                                                 Visibility="{Binding IsAudioDeviceMenuOpen, Converter={StaticResource BoolToVis}}"
                                                 Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="10"
                                                 Padding="5" Panel.ZIndex="20" VerticalAlignment="Top" HorizontalAlignment="Left"
@@ -2276,6 +2290,18 @@
                                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                                 <StackPanel>
                                                     <TextBlock Text="OUTPUT DEVICE" Foreground="#65FFFFFF" FontSize="9.5" FontWeight="Bold" Margin="6,2,4,4"/>
+                                                    <TextBlock Text="No audio outputs available" Foreground="#70FFFFFF" FontSize="10.5" Margin="6,2,6,4">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding AudioDevices.Count}" Value="0">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <ItemsControl ItemsSource="{Binding AudioDevices}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
@@ -2336,6 +2362,9 @@
                                             <TextBlock Text="{Binding MediaDurationText}" Foreground="#8E9098" FontSize="11" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                             <Slider Style="{StaticResource FluentVolumeSlider}"
                                                     Value="{Binding MediaProgressPercent, Mode=TwoWay}"
+                                                    IsEnabled="{Binding HasMedia}"
+                                                    IsMoveToPointEnabled="True"
+                                                    ToolTip="Click or drag to seek track"
                                                     Minimum="0" Maximum="100"
                                                     VerticalAlignment="Center"
                                                     PreviewMouseLeftButtonUp="OnMediaSliderPreviewMouseLeftButtonUp"/>
@@ -2439,8 +2468,14 @@
                                                             <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE916;" FontSize="14" Foreground="#FF5E36" Margin="0,0,9,0" VerticalAlignment="Center"/>
                                                             <StackPanel VerticalAlignment="Center">
                                                                 <TextBlock Text="Pomodoro" Foreground="White" FontSize="12" FontWeight="SemiBold"/>
-                                                                <TextBlock Text="{Binding DataContext.Timer.PomodoroTimeText, RelativeSource={RelativeSource AncestorType=Window}, StringFormat='{}{0} Focus'}"
-                                                                           Foreground="#7A7D85" FontSize="10" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock Foreground="#7A7D85" FontSize="10" Margin="0,1,0,0" TextTrimming="CharacterEllipsis">
+                                                                    <TextBlock.Text>
+                                                                        <MultiBinding StringFormat="{}{0} • {1}">
+                                                                            <Binding Path="DataContext.Timer.PomodoroTimeText" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                            <Binding Path="DataContext.Timer.DialPhaseLabel" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                                                        </MultiBinding>
+                                                                    </TextBlock.Text>
+                                                                </TextBlock>
                                                             </StackPanel>
                                                         </DockPanel>
                                                     </Border>
@@ -2722,7 +2757,7 @@
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72C;" FontSize="12" Foreground="White"/>
                                                 </Button>
 
-                                                <Button Style="{StaticResource MediaHeroPlayBtn}" Command="{Binding Timer.ToggleCountdownCommand}" Margin="12,0" Background="#00E5FF">
+                                                <Button Style="{StaticResource MediaHeroPlayBtn}" Command="{Binding Timer.ToggleCountdownCommand}" Margin="12,0" Background="#00E5FF" ToolTip="Start / Pause Countdown">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Foreground="#101216" FontSize="15">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -2759,7 +2794,7 @@
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72C;" FontSize="12" Foreground="White"/>
                                                 </Button>
 
-                                                <Button Style="{StaticResource MediaHeroPlayBtn}" Command="{Binding Timer.ToggleStopwatchCommand}" Margin="12,0" Background="#FFD600">
+                                                <Button Style="{StaticResource MediaHeroPlayBtn}" Command="{Binding Timer.ToggleStopwatchCommand}" Margin="12,0" Background="#FFD600" ToolTip="Start / Pause Stopwatch">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Foreground="#101216" FontSize="15">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -2782,15 +2817,30 @@
                                             </StackPanel>
 
                                             <Border Grid.Row="1" Background="#12FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Padding="6,4" Height="112">
-                                                <ListBox ItemsSource="{Binding Timer.Laps}" Background="Transparent" BorderThickness="0"
-                                                         ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
-                                                         ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                                                    <ListBox.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding}" Foreground="#E8FFFFFF" FontSize="11" Margin="4,2"/>
-                                                        </DataTemplate>
-                                                    </ListBox.ItemTemplate>
-                                                </ListBox>
+                                                <Grid>
+                                                    <TextBlock Text="Tap flag icon to record lap splits" Foreground="#58FFFFFF" FontSize="10.5"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Timer.Laps.Count}" Value="0">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <ListBox ItemsSource="{Binding Timer.Laps}" Background="Transparent" BorderThickness="0"
+                                                             ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
+                                                             ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                                        <ListBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding}" Foreground="#E8FFFFFF" FontSize="11" Margin="4,2"/>
+                                                            </DataTemplate>
+                                                        </ListBox.ItemTemplate>
+                                                    </ListBox>
+                                                </Grid>
                                             </Border>
                                         </Grid>
 
@@ -2871,13 +2921,26 @@
                                                         <TextBlock Text="Snip" FontSize="10.5" FontWeight="SemiBold"/>
                                                     </StackPanel>
                                                 </Button>
-                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ShareDockDirectlyCommand}" Background="#22FF5E36" Padding="5,3" Margin="4,0,0,0" ToolTip="Send Dock Files via Google Quick Share">
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ShareDockDirectlyCommand}" IsEnabled="{Binding HasStagedFiles}" Background="#22FF5E36" Padding="5,3" Margin="4,0,0,0" ToolTip="Send Dock Files via Google Quick Share">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="10.5" Foreground="#FF5E36"/>
                                                 </Button>
-                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding CopyShelfPathsCommand}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Copy File Paths">
-                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8C8;" FontSize="10.5" Foreground="#C0FFFFFF"/>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding CopyShelfPathsCommand}" IsEnabled="{Binding HasStagedFiles}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Copy File Paths">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="10.5">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#xE8C8;"/>
+                                                                <Setter Property="Foreground" Value="#C0FFFFFF"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding ShelfCopied}" Value="True">
+                                                                        <Setter Property="Text" Value="&#xE73E;"/>
+                                                                        <Setter Property="Foreground" Value="#69F0AE"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                 </Button>
-                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShelfCommand}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Clear Dock">
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShelfCommand}" IsEnabled="{Binding HasStagedFiles}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Clear Dock">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE74D;" FontSize="10.5" Foreground="#B0FFFFFF"/>
                                                 </Button>
                                             </StackPanel>
@@ -3035,7 +3098,12 @@
                                         <Border Grid.Row="1" Background="#10FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1"
                                                 CornerRadius="8" Margin="0,0,0,6" Padding="8,4">
                                             <DockPanel LastChildFill="True">
-                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE721;" FontSize="10.5" Foreground="#70FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE721;" FontSize="10.5" Foreground="#70FFFFFF" Margin="0,0,7,0" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearClipboardSearchCommand}"
+                                                        Visibility="{Binding HasClipboardSearchText, Converter={StaticResource BoolToVis}}"
+                                                        DockPanel.Dock="Right" Padding="3,1" Margin="4,0,0,0" ToolTip="Clear search">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9" Foreground="#80FFFFFF"/>
+                                                </Button>
                                                 <Grid>
                                                     <TextBlock Text="Search copied text, links, or domains..." Foreground="#50FFFFFF" FontSize="11" VerticalAlignment="Center" IsHitTestVisible="False">
                                                         <TextBlock.Style>
@@ -3069,7 +3137,18 @@
                                                 </Style>
                                             </StackPanel.Style>
                                             <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE77F;" FontSize="22" Foreground="#40FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,5"/>
-                                            <TextBlock Text="Copy text, URLs, or images anywhere" Foreground="#60FFFFFF" FontSize="11.5" HorizontalAlignment="Center"/>
+                                            <TextBlock Foreground="#60FFFFFF" FontSize="11.5" HorizontalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="No matching clipboard items"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ClipboardHistory.Count}" Value="0">
+                                                                <Setter Property="Text" Value="Copy text, URLs, or images anywhere"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
 
                                         <!-- Smart Clipboard List -->
@@ -3655,7 +3734,7 @@
                                                             </DockPanel>
 
                                                             <StackPanel Orientation="Horizontal">
-                                                                <Button Command="{Binding ToggleCalendarHighPriorityCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,5,0">
+                                                                <Button Command="{Binding ToggleCalendarHighPriorityCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,5,0" ToolTip="Mark Reminder as Urgent">
                                                                     <Button.Template>
                                                                         <ControlTemplate TargetType="Button">
                                                                             <Border x:Name="bd" CornerRadius="6" Padding="7,2.5" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
@@ -3672,16 +3751,20 @@
                                                                     </Button.Template>
                                                                 </Button>
 
-                                                                <Button Command="{Binding ToggleCalendarPlayChimeCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                <Button Command="{Binding ToggleCalendarPlayChimeCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Play sound chime when due">
                                                                     <Button.Template>
                                                                         <ControlTemplate TargetType="Button">
                                                                             <Border x:Name="bd" CornerRadius="6" Padding="7,2.5" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
-                                                                                <TextBlock x:Name="txt" Text="🔔 Chime Alert" FontSize="9.5" FontWeight="SemiBold" Foreground="#B0B4BC"/>
+                                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                    <TextBlock x:Name="ico" FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" FontSize="9.5" Foreground="#B0B4BC" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                                    <TextBlock x:Name="txt" Text="Chime Alert" FontSize="9.5" FontWeight="SemiBold" Foreground="#B0B4BC" VerticalAlignment="Center"/>
+                                                                                </StackPanel>
                                                                             </Border>
                                                                             <ControlTemplate.Triggers>
                                                                                 <DataTrigger Binding="{Binding DataContext.NewCalendarPlayChime, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                                                                     <Setter TargetName="bd" Property="Background" Value="#2A69F0AE"/>
                                                                                     <Setter TargetName="bd" Property="BorderBrush" Value="#6869F0AE"/>
+                                                                                    <Setter TargetName="ico" Property="Foreground" Value="#69F0AE"/>
                                                                                     <Setter TargetName="txt" Property="Foreground" Value="#D8FFE8"/>
                                                                                 </DataTrigger>
                                                                             </ControlTemplate.Triggers>
@@ -3840,7 +3923,7 @@
                                                             </Button>
                                                         </StackPanel>
 
-                                                        <Button Command="{Binding SaveNewCalendarItemCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                        <Button Command="{Binding SaveNewCalendarItemCommand}" IsEnabled="{Binding CanSaveCalendarItem}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
                                                             <Button.Template>
                                                                 <ControlTemplate TargetType="Button">
                                                                     <Border x:Name="saveBd" CornerRadius="8" Padding="14,4.5" Background="#FF5E36">
@@ -3849,6 +3932,10 @@
                                                                     <ControlTemplate.Triggers>
                                                                         <Trigger Property="IsMouseOver" Value="True">
                                                                             <Setter TargetName="saveBd" Property="Background" Value="#FF7048"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsEnabled" Value="False">
+                                                                            <Setter TargetName="saveBd" Property="Background" Value="#26FFFFFF"/>
+                                                                            <Setter Property="Opacity" Value="0.45"/>
                                                                         </Trigger>
                                                                     </ControlTemplate.Triggers>
                                                                 </ControlTemplate>
@@ -3966,7 +4053,18 @@
                                                     </Style>
                                                 </StackPanel.Style>
                                                 <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="22" Foreground="#38FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                                <TextBlock Text="Nothing scheduled here" Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                                <TextBlock Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="No matching items"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding CalendarAgendaFilterIndex}" Value="0">
+                                                                    <Setter Property="Text" Value="Nothing scheduled here"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <TextBlock Text="Tap + New for a Reminder or Event" Foreground="#48FFFFFF" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
 
@@ -4157,8 +4255,9 @@
                                                     <StackPanel Grid.Row="0">
                                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
                                                             <TextBlock Text="{Binding MemoryPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="22" FontWeight="Bold"/>
-                                                            <TextBlock Text="{Binding RamText}" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold" Margin="5,0,0,3" VerticalAlignment="Bottom"/>
+                                                            <TextBlock Text="RAM" Foreground="#8E9098" FontSize="10.5" FontWeight="SemiBold" Margin="6,0,0,3" VerticalAlignment="Bottom"/>
                                                         </StackPanel>
+                                                        <TextBlock Text="{Binding RamText}" Foreground="#78FFFFFF" FontSize="9.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,-1,0,0"/>
                                                     </StackPanel>
                                                     <Grid Grid.Row="1" Height="30" VerticalAlignment="Bottom" ClipToBounds="True">
                                                         <Polygon Points="{Binding RamAreaPoints}" Stretch="Fill">
@@ -4194,74 +4293,76 @@
                                                     <TextBlock Text="Active Load &amp; VRAM" Foreground="#60FFFFFF" FontSize="9.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                                                 </DockPanel>
 
-                                                <ItemsControl Grid.Row="1" ItemsSource="{Binding GpuAdapters}" VerticalAlignment="Center">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Background="#0EFFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="9" Padding="8,5" Margin="0,2">
-                                                                <Grid>
-                                                                    <Grid.RowDefinitions>
-                                                                        <RowDefinition Height="Auto"/>
-                                                                        <RowDefinition Height="Auto"/>
-                                                                    </Grid.RowDefinitions>
+                                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding GpuAdapters}" VerticalAlignment="Center">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="#0EFFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="9" Padding="8,5" Margin="0,2">
+                                                                    <Grid>
+                                                                        <Grid.RowDefinitions>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                            <RowDefinition Height="Auto"/>
+                                                                        </Grid.RowDefinitions>
 
-                                                                    <DockPanel Grid.Row="0" LastChildFill="True">
-                                                                        <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}"
-                                                                                   Foreground="White" FontSize="13.5" FontWeight="Bold"
-                                                                                   DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                                                                        <Border DockPanel.Dock="Right" Margin="6,0,0,0" Padding="5,1" CornerRadius="5"
-                                                                                Background="#24FF5E36" BorderBrush="#60FF5E36" BorderThickness="0.8"
-                                                                                VerticalAlignment="Center"
-                                                                                Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}">
-                                                                            <TextBlock Text="IN USE" Foreground="#FF5E36" FontSize="8.5" FontWeight="Bold"/>
-                                                                        </Border>
-                                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                                            <Border Background="#1FFFFFFF" CornerRadius="4" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
-                                                                                <TextBlock Text="{Binding RoleLabel}" FontSize="8.5" FontWeight="Bold" VerticalAlignment="Center">
-                                                                                    <TextBlock.Style>
-                                                                                        <Style TargetType="TextBlock">
-                                                                                            <Setter Property="Foreground" Value="#40C4FF"/>
-                                                                                            <Style.Triggers>
-                                                                                                <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
-                                                                                                    <Setter Property="Foreground" Value="#69F0AE"/>
-                                                                                                </DataTrigger>
-                                                                                            </Style.Triggers>
-                                                                                        </Style>
-                                                                                    </TextBlock.Style>
-                                                                                </TextBlock>
+                                                                        <DockPanel Grid.Row="0" LastChildFill="True">
+                                                                            <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}"
+                                                                                       Foreground="White" FontSize="13.5" FontWeight="Bold"
+                                                                                       DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                                            <Border DockPanel.Dock="Right" Margin="6,0,0,0" Padding="5,1" CornerRadius="5"
+                                                                                    Background="#24FF5E36" BorderBrush="#60FF5E36" BorderThickness="0.8"
+                                                                                    VerticalAlignment="Center"
+                                                                                    Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}">
+                                                                                <TextBlock Text="IN USE" Foreground="#FF5E36" FontSize="8.5" FontWeight="Bold"/>
                                                                             </Border>
-                                                                            <TextBlock Text="{Binding Name}" ToolTip="{Binding Name}"
-                                                                                       Foreground="White" FontSize="11" FontWeight="SemiBold"
-                                                                                       MaxWidth="175" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                                        </StackPanel>
-                                                                    </DockPanel>
+                                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                                <Border Background="#1FFFFFFF" CornerRadius="4" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding RoleLabel}" FontSize="8.5" FontWeight="Bold" VerticalAlignment="Center">
+                                                                                        <TextBlock.Style>
+                                                                                            <Style TargetType="TextBlock">
+                                                                                                <Setter Property="Foreground" Value="#40C4FF"/>
+                                                                                                <Style.Triggers>
+                                                                                                    <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
+                                                                                                        <Setter Property="Foreground" Value="#69F0AE"/>
+                                                                                                    </DataTrigger>
+                                                                                                </Style.Triggers>
+                                                                                            </Style>
+                                                                                        </TextBlock.Style>
+                                                                                    </TextBlock>
+                                                                                </Border>
+                                                                                <TextBlock Text="{Binding Name}" ToolTip="{Binding Name}"
+                                                                                           Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                                                                           MaxWidth="175" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
+                                                                        </DockPanel>
 
-                                                                    <Grid Grid.Row="1" Margin="0,3,0,0">
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="Auto"/>
-                                                                            <ColumnDefinition Width="8"/>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="{Binding VramText}" Foreground="#69F0AE" FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                                                        <ProgressBar Grid.Column="2" Height="4" Background="#22252C" VerticalAlignment="Center"
-                                                                                     Value="{Binding GpuPercent, Mode=OneWay}" Maximum="100">
-                                                                            <ProgressBar.Style>
-                                                                                <Style TargetType="ProgressBar" BasedOn="{StaticResource MetricProgressBarStyle}">
-                                                                                    <Setter Property="Height" Value="4"/>
-                                                                                    <Setter Property="Foreground" Value="#40C4FF"/>
-                                                                                    <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
-                                                                                            <Setter Property="Foreground" Value="#69F0AE"/>
-                                                                                        </DataTrigger>
-                                                                                    </Style.Triggers>
-                                                                                </Style>
-                                                                            </ProgressBar.Style>
-                                                                        </ProgressBar>
+                                                                        <Grid Grid.Row="1" Margin="0,3,0,0">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                <ColumnDefinition Width="8"/>
+                                                                                <ColumnDefinition Width="*"/>
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <TextBlock Grid.Column="0" Text="{Binding VramText}" Foreground="#69F0AE" FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                                            <ProgressBar Grid.Column="2" Height="4" Background="#22252C" VerticalAlignment="Center"
+                                                                                         Value="{Binding GpuPercent, Mode=OneWay}" Maximum="100">
+                                                                                <ProgressBar.Style>
+                                                                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource MetricProgressBarStyle}">
+                                                                                        <Setter Property="Height" Value="4"/>
+                                                                                        <Setter Property="Foreground" Value="#40C4FF"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsDiscrete}" Value="True">
+                                                                                                <Setter Property="Foreground" Value="#69F0AE"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </ProgressBar.Style>
+                                                                            </ProgressBar>
+                                                                        </Grid>
                                                                     </Grid>
-                                                                </Grid>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
                                             </Grid>
 
                                             <!-- Single-GPU Hero View -->
@@ -4409,29 +4510,32 @@
                                                 </DockPanel>
 
                                                 <Border Grid.Row="0" Grid.RowSpan="3"
+                                                        Tag="MenuPopup"
                                                         Visibility="{Binding IsDriveMenuOpen, Converter={StaticResource BoolToVis}}"
                                                         Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="10"
                                                         Padding="5" Panel.ZIndex="10" VerticalAlignment="Top" HorizontalAlignment="Right"
-                                                        Margin="0,22,0,0" MinWidth="160">
-                                                    <StackPanel>
-                                                        <TextBlock Text="SELECT DRIVE" Foreground="#65FFFFFF" FontSize="9" FontWeight="Bold" Margin="5,2,4,3"/>
-                                                        <ItemsControl ItemsSource="{Binding Drives}">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Button Style="{StaticResource NotchIconBtn}"
-                                                                            Command="{Binding DataContext.SelectDriveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}"
-                                                                            HorizontalContentAlignment="Stretch"
-                                                                            Padding="5,3" Margin="0,1">
-                                                                        <DockPanel LastChildFill="True">
-                                                                            <TextBlock Text="{Binding FreeGb, StringFormat='{}{0:F0}G free'}" Foreground="#80FFFFFF" FontSize="9.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
-                                                                            <TextBlock Text="{Binding DisplayName}" Foreground="White" FontSize="10.5" FontWeight="SemiBold"/>
-                                                                        </DockPanel>
-                                                                    </Button>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </StackPanel>
+                                                        Margin="0,22,0,0" MinWidth="160" MaxHeight="135">
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                        <StackPanel>
+                                                            <TextBlock Text="SELECT DRIVE" Foreground="#65FFFFFF" FontSize="9" FontWeight="Bold" Margin="5,2,4,3"/>
+                                                            <ItemsControl ItemsSource="{Binding Drives}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                                                Command="{Binding DataContext.SelectDriveCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                HorizontalContentAlignment="Stretch"
+                                                                                Padding="5,3" Margin="0,1">
+                                                                            <DockPanel LastChildFill="True">
+                                                                                <TextBlock Text="{Binding FreeGb, StringFormat='{}{0:F0}G free'}" Foreground="#80FFFFFF" FontSize="9.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                                                <TextBlock Text="{Binding DisplayName}" Foreground="White" FontSize="10.5" FontWeight="SemiBold"/>
+                                                                            </DockPanel>
+                                                                        </Button>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
                                                 </Border>
 
                                                 <DockPanel Grid.Row="1" VerticalAlignment="Center" LastChildFill="True">
@@ -4493,35 +4597,38 @@
                                                 </DockPanel>
 
                                                 <Border Grid.Row="0" Grid.RowSpan="3"
+                                                        Tag="MenuPopup"
                                                         Visibility="{Binding IsAudioDeviceMenuOpen, Converter={StaticResource BoolToVis}}"
                                                         Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="10"
                                                         Padding="5" Panel.ZIndex="10" VerticalAlignment="Top" HorizontalAlignment="Right"
-                                                        Margin="0,22,0,0" MinWidth="165">
-                                                    <StackPanel>
-                                                        <TextBlock Text="PLAYBACK DEVICE" Foreground="#65FFFFFF" FontSize="9" FontWeight="Bold" Margin="5,2,4,3"/>
-                                                        <ItemsControl ItemsSource="{Binding AudioDevices}">
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Button Style="{StaticResource NotchIconBtn}"
-                                                                            Command="{Binding DataContext.SelectAudioDeviceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                            CommandParameter="{Binding}"
-                                                                            HorizontalContentAlignment="Stretch"
-                                                                            Padding="5,3" Margin="0,1">
-                                                                        <DockPanel LastChildFill="True">
-                                                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#FF5E36" FontSize="10" Margin="5,0,0,0" DockPanel.Dock="Right"
-                                                                                       Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
-                                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="5,0,0,0"
-                                                                                        Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}">
-                                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center"/>
-                                                                                <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
-                                                                            </StackPanel>
-                                                                            <TextBlock Text="{Binding Name}" Foreground="White" FontSize="10.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                                        </DockPanel>
-                                                                    </Button>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </StackPanel>
+                                                        Margin="0,22,0,0" MinWidth="175" MaxHeight="135">
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                        <StackPanel>
+                                                            <TextBlock Text="PLAYBACK DEVICE" Foreground="#65FFFFFF" FontSize="9" FontWeight="Bold" Margin="5,2,4,3"/>
+                                                            <ItemsControl ItemsSource="{Binding AudioDevices}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Button Style="{StaticResource NotchIconBtn}"
+                                                                                Command="{Binding DataContext.SelectAudioDeviceCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                HorizontalContentAlignment="Stretch"
+                                                                                Padding="5,3" Margin="0,1">
+                                                                            <DockPanel LastChildFill="True">
+                                                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#FF5E36" FontSize="10" Margin="5,0,0,0" DockPanel.Dock="Right"
+                                                                                           Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}"/>
+                                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right" Margin="5,0,0,0"
+                                                                                            Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}">
+                                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center"/>
+                                                                                    <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                                                </StackPanel>
+                                                                                <TextBlock Text="{Binding Name}" Foreground="White" FontSize="10.5" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                            </DockPanel>
+                                                                        </Button>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
                                                 </Border>
 
                                                 <TextBlock Grid.Row="1" Text="{Binding MasterVolume, StringFormat='{}{0:F0}%'}" Foreground="White" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -4552,7 +4659,7 @@
                             </Grid>
                         </TabItem>
 
-                        <!-- TAB 5: TOOLS & QUICK SCRATCHPAD -->
+                        <!-- TAB 6: TOOLS & QUICK SCRATCHPAD -->
                         <TabItem Style="{StaticResource FluentSegmentedTabItem}">
                             <TabItem.Header>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -4578,7 +4685,18 @@
                                         </Grid.RowDefinitions>
 
                                         <!-- Top Display Brightness Control Card -->
-                                        <Border Grid.Row="0" Background="#12FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Padding="9,7" Margin="0,0,0,8">
+                                        <Border Grid.Row="0" Background="#12FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="10" Padding="9,7" Margin="0,0,0,8"
+                                                ToolTip="{Binding BrightnessTooltip}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsBrightnessSupported}" Value="False">
+                                                            <Setter Property="Opacity" Value="0.45"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <DockPanel LastChildFill="True">
                                                 <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE706;" FontSize="13" Foreground="#FFD54F" DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding DisplayBrightness, StringFormat='{}{0}%'}" Foreground="White" FontSize="11.5" FontWeight="Bold" DockPanel.Dock="Right" Width="34" TextAlignment="Right" VerticalAlignment="Center"/>
@@ -4716,16 +4834,31 @@
                                         </DockPanel>
 
                                         <Border Grid.Row="1" Background="#0EFFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
-                                            <TextBox Text="{Binding ScratchpadText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     AcceptsReturn="True"
-                                                     TextWrapping="Wrap"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     Background="Transparent"
-                                                     Foreground="White"
-                                                     CaretBrush="#FF5E36"
-                                                     BorderThickness="0"
-                                                     Padding="6"
-                                                     FontSize="12"/>
+                                            <Grid>
+                                                <TextBlock Text="Jot down quick notes, links, or snippets..." Foreground="#48FFFFFF" FontSize="12" Margin="9,7,9,0"
+                                                           VerticalAlignment="Top" IsHitTestVisible="False">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding ScratchpadText}" Value="">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBox Text="{Binding ScratchpadText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         AcceptsReturn="True"
+                                                         TextWrapping="Wrap"
+                                                         VerticalScrollBarVisibility="Auto"
+                                                         Background="Transparent"
+                                                         Foreground="White"
+                                                         CaretBrush="#FF5E36"
+                                                         BorderThickness="0"
+                                                         Padding="6"
+                                                         FontSize="12"/>
+                                            </Grid>
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -4781,7 +4914,7 @@
                                                 <Button Style="{StaticResource NotchIconBtn}" Command="{Binding AddClipboardToShareCommand}" Background="#14FFFFFF" Padding="6,3" Margin="4,0,0,0" ToolTip="Share Latest Clipboard Text/Image">
                                                     <TextBlock Text="Clip" FontSize="10" FontWeight="SemiBold" Foreground="#D8FFFFFF"/>
                                                 </Button>
-                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShareQueueCommand}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Clear Queue">
+                                                <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ClearShareQueueCommand}" IsEnabled="{Binding HasShareQueueItems}" Background="#14FFFFFF" Padding="5,3" Margin="4,0,0,0" ToolTip="Clear Queue">
                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE74D;" FontSize="10" Foreground="#A0FFFFFF"/>
                                                 </Button>
                                             </StackPanel>
@@ -4921,10 +5054,21 @@
                                                 </Grid.ColumnDefinitions>
 
                                                 <Button Grid.Column="0" Style="{StaticResource BentoTileBtn}" Command="{Binding OpenQuickShareAppCommand}" Padding="9,6"
-                                                        ToolTip="Open Google Quick Share (Receive / Visibility)">
+                                                        ToolTip="Open or download Google Quick Share">
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE896;" FontSize="11.5" Foreground="#69F0AE" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                        <TextBlock Text="Receive / Open App" Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                        <TextBlock Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="Get Quick Share"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsQuickShareInstalled}" Value="True">
+                                                                            <Setter Property="Text" Value="Receive / Open App"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                     </StackPanel>
                                                 </Button>
 
@@ -5061,7 +5205,7 @@
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                <!-- Edit / Customize Home Layout trigger (visible on Home tab) -->
+                                <!-- Edit / Customize Home Layout trigger (visible on Home tab when not editing) -->
                                 <Button Command="{Binding ToggleHomeEditModeCommand}"
                                         Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,6,0"
                                         ToolTip="Customize, resize, add, or remove Home widgets">
@@ -5069,9 +5213,13 @@
                                         <Style TargetType="Button">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding SelectedTabIndex}" Value="0"/>
+                                                        <Condition Binding="{Binding IsHomeEditMode}" Value="False"/>
+                                                    </MultiDataTrigger.Conditions>
                                                     <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
+                                                </MultiDataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
@@ -5087,14 +5235,6 @@
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter TargetName="editBd" Property="Background" Value="#28FFFFFF"/>
                                                 </Trigger>
-                                                <DataTrigger Binding="{Binding DataContext.IsHomeEditMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                    <Setter TargetName="editBd" Property="Background" Value="#32FF5E36"/>
-                                                    <Setter TargetName="editBd" Property="BorderBrush" Value="#80FF5E36"/>
-                                                    <Setter TargetName="editIco" Property="Text" Value="&#xE73E;"/>
-                                                    <Setter TargetName="editIco" Property="Foreground" Value="#FF8A65"/>
-                                                    <Setter TargetName="editTxt" Property="Text" Value="Done"/>
-                                                    <Setter TargetName="editTxt" Property="Foreground" Value="White"/>
-                                                </DataTrigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
@@ -5156,7 +5296,8 @@
                     </Border>
 
                     <!-- Bottom Bar Audio Output Switcher Flyout -->
-                    <Border Visibility="{Binding IsBottomAudioMenuOpen, Converter={StaticResource BoolToVis}}"
+                    <Border Tag="MenuPopup"
+                            Visibility="{Binding IsBottomAudioMenuOpen, Converter={StaticResource BoolToVis}}"
                             Background="#F61A1C20" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="12"
                             Padding="6" Panel.ZIndex="200" VerticalAlignment="Bottom" HorizontalAlignment="Left"
                             Margin="10,0,0,46" MinWidth="275" MaxHeight="160">

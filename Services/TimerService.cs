@@ -49,7 +49,6 @@ public sealed partial class TimerService : ObservableObject
     // ── Pomodoro Mode State ──────────────────────────────────────────────────
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PomodoroTimeText))]
-    [NotifyPropertyChangedFor(nameof(PomodoroRemainingSeconds))]
     [NotifyPropertyChangedFor(nameof(PomodoroProgress))]
     [NotifyPropertyChangedFor(nameof(DialTimeText))]
     [NotifyPropertyChangedFor(nameof(DialProgressFraction))]
@@ -118,7 +117,6 @@ public sealed partial class TimerService : ObservableObject
         : $"Focus {FocusMinutes:D2}:00 next";
 
     public string PomodoroTimeText => $"{Math.Floor(PomodoroRemaining.TotalMinutes):00}:{PomodoroRemaining.Seconds:00}";
-    public double PomodoroRemainingSeconds => PomodoroRemaining.TotalSeconds;
 
     public double PomodoroProgress
     {
@@ -185,7 +183,7 @@ public sealed partial class TimerService : ObservableObject
     public ObservableCollection<string> Laps { get; } = new();
 
     public string StopwatchTimeText =>
-        $"{StopwatchElapsed.Minutes:D2}:{StopwatchElapsed.Seconds:D2}.{StopwatchElapsed.Milliseconds / 10:D2}";
+        $"{(int)Math.Floor(StopwatchElapsed.TotalMinutes):D2}:{StopwatchElapsed.Seconds:D2}.{StopwatchElapsed.Milliseconds / 10:D2}";
 
     public double StopwatchProgress =>
         (StopwatchElapsed.Seconds + StopwatchElapsed.Milliseconds / 1000.0) / 60.0;
@@ -250,29 +248,58 @@ public sealed partial class TimerService : ObservableObject
         {
             if (IsPomodoroRunning)  return PomodoroTimeText;
             if (IsCountdownRunning) return CountdownTimeText;
-            if (IsStopwatchRunning) return $"{StopwatchElapsed.Minutes:D2}:{StopwatchElapsed.Seconds:D2}";
+            if (IsStopwatchRunning) return $"{(int)Math.Floor(StopwatchElapsed.TotalMinutes):D2}:{StopwatchElapsed.Seconds:D2}";
             return string.Empty;
         }
     }
 
     public event Action? TimerActivityChanged;
+    private DateTime _lastTickUtc = DateTime.UtcNow;
 
     public TimerService()
     {
-        _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
+        _ticker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _ticker.Tick += OnTick;
     }
 
+    private void EnsureTickerRunning()
+    {
+        if (!IsAnyTimerRunning)
+        {
+            _ticker.Stop();
+            return;
+        }
+
+        _ticker.Interval = IsStopwatchRunning
+            ? TimeSpan.FromMilliseconds(100)
+            : TimeSpan.FromMilliseconds(500);
+
+        if (!_ticker.IsEnabled)
+        {
+            _lastTickUtc = DateTime.UtcNow;
+            _ticker.Start();
+        }
+    }
+
+    public void Stop() => _ticker.Stop();
+
     private void OnTick(object? sender, EventArgs e)
     {
+        DateTime now = DateTime.UtcNow;
+        TimeSpan delta = now - _lastTickUtc;
+        _lastTickUtc = now;
+
+        if (delta <= TimeSpan.Zero) delta = TimeSpan.FromMilliseconds(100);
+        else if (delta > TimeSpan.FromSeconds(5)) delta = TimeSpan.FromSeconds(5);
+
         bool changed = false;
 
         // 1. Pomodoro Tick
         if (IsPomodoroRunning)
         {
-            if (PomodoroRemaining > TimeSpan.FromMilliseconds(100))
+            if (PomodoroRemaining > delta)
             {
-                PomodoroRemaining -= TimeSpan.FromMilliseconds(100);
+                PomodoroRemaining -= delta;
             }
             else
             {
@@ -285,9 +312,9 @@ public sealed partial class TimerService : ObservableObject
         // 2. Countdown Tick
         if (IsCountdownRunning)
         {
-            if (CountdownRemaining > TimeSpan.FromMilliseconds(100))
+            if (CountdownRemaining > delta)
             {
-                CountdownRemaining -= TimeSpan.FromMilliseconds(100);
+                CountdownRemaining -= delta;
             }
             else
             {
@@ -301,36 +328,35 @@ public sealed partial class TimerService : ObservableObject
         // 3. Stopwatch Tick
         if (IsStopwatchRunning)
         {
-            StopwatchElapsed += TimeSpan.FromMilliseconds(100);
+            StopwatchElapsed += delta;
             changed = true;
         }
 
         if (changed)
         {
-            OnPropertyChanged(nameof(DialTimeText));
-            OnPropertyChanged(nameof(DialProgressFraction));
-            OnPropertyChanged(nameof(IslandTimerText));
             TimerActivityChanged?.Invoke();
         }
 
-        if (!IsAnyTimerRunning)
-        {
-            _ticker.Stop();
-        }
+        EnsureTickerRunning();
     }
 
     public void ApplySettings(AppSettings settings)
     {
+        int prevFocus = FocusMinutes;
+        int prevBreak = ShortBreakMinutes;
+
         FocusMinutes        = settings.DefaultFocusMinutes;
         ShortBreakMinutes   = settings.DefaultBreakMinutes;
         WaterCupsTarget     = settings.DailyWaterTargetCups;
         SoundChimesEnabled  = settings.TimerSoundChimesEnabled;
 
-        if (PomodoroPhase == PomodoroPhase.Focus && !IsPomodoroRunning)
+        if (PomodoroPhase == PomodoroPhase.Focus && !IsPomodoroRunning &&
+            PomodoroRemaining == TimeSpan.FromMinutes(prevFocus))
         {
             PomodoroRemaining = TimeSpan.FromMinutes(FocusMinutes);
         }
-        else if (PomodoroPhase == PomodoroPhase.ShortBreak && !IsPomodoroRunning)
+        else if (PomodoroPhase == PomodoroPhase.ShortBreak && !IsPomodoroRunning &&
+                 PomodoroRemaining == TimeSpan.FromMinutes(prevBreak))
         {
             PomodoroRemaining = TimeSpan.FromMinutes(ShortBreakMinutes);
         }
@@ -427,10 +453,7 @@ public sealed partial class TimerService : ObservableObject
     public void TogglePomodoro()
     {
         IsPomodoroRunning = !IsPomodoroRunning;
-        if (IsPomodoroRunning && !_ticker.IsEnabled)
-        {
-            _ticker.Start();
-        }
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -441,6 +464,7 @@ public sealed partial class TimerService : ObservableObject
         PomodoroPhase     = PomodoroPhase.Focus;
         CurrentCycle      = 1;
         PomodoroRemaining = TimeSpan.FromMinutes(FocusMinutes);
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -448,6 +472,7 @@ public sealed partial class TimerService : ObservableObject
     public void SkipPomodoro()
     {
         HandlePomodoroPhaseComplete();
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -497,10 +522,7 @@ public sealed partial class TimerService : ObservableObject
     public void ToggleCountdown()
     {
         IsCountdownRunning = !IsCountdownRunning;
-        if (IsCountdownRunning && !_ticker.IsEnabled)
-        {
-            _ticker.Start();
-        }
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -509,6 +531,7 @@ public sealed partial class TimerService : ObservableObject
     {
         IsCountdownRunning = false;
         CountdownRemaining = TimeSpan.FromMinutes(CountdownMinutes);
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -519,6 +542,7 @@ public sealed partial class TimerService : ObservableObject
         CountdownMinutes   = Math.Clamp(m, 1, 180);
         CountdownRemaining = TimeSpan.FromMinutes(CountdownMinutes);
         IsCountdownRunning = false;
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -533,10 +557,7 @@ public sealed partial class TimerService : ObservableObject
     public void ToggleStopwatch()
     {
         IsStopwatchRunning = !IsStopwatchRunning;
-        if (IsStopwatchRunning && !_ticker.IsEnabled)
-        {
-            _ticker.Start();
-        }
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 
@@ -546,6 +567,7 @@ public sealed partial class TimerService : ObservableObject
         IsStopwatchRunning = false;
         StopwatchElapsed   = TimeSpan.Zero;
         Laps.Clear();
+        EnsureTickerRunning();
         TimerActivityChanged?.Invoke();
     }
 

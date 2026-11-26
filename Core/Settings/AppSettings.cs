@@ -13,10 +13,10 @@ public sealed class AppSettings
     public string DockEdge { get; set; } = "Top";
 
     /// <summary>Milliseconds of hover dwell before CollapsedHover activates.</summary>
-    public int HoverDwellMs { get; set; } = 60;
+    public int HoverDwellMs { get; set; } = 100;
 
     /// <summary>Milliseconds of grace period before CollapsedHover collapses after mouse-leave.</summary>
-    public int ExitGraceMs { get; set; } = 120;
+    public int ExitGraceMs { get; set; } = 300;
 
     /// <summary>Alpha for the WPF IPS tint overlay (0–1). 0.70 = 70% opaque dark-slate.</summary>
     public double AcrylicTintOpacity { get; set; } = 0.70;

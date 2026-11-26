@@ -17,10 +17,9 @@ public sealed class SettingsService
         DefaultIgnoreCondition  = JsonIgnoreCondition.Never
     };
 
-    public AppSettings Current { get; private set; } = new();
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
 
-    /// <summary>Raised after a successful <see cref="LoadAsync"/> (including config reload).</summary>
-    public event EventHandler? SettingsReloaded;
+    public AppSettings Current { get; private set; } = new();
 
     public async Task LoadAsync()
     {
@@ -29,19 +28,23 @@ public sealed class SettingsService
             if (!File.Exists(SettingsPath)) { await SaveAsync(); return; }
             await using var fs = File.OpenRead(SettingsPath);
             Current = await JsonSerializer.DeserializeAsync<AppSettings>(fs, JsonOpts) ?? new();
-            SettingsReloaded?.Invoke(this, EventArgs.Empty);
         }
         catch { Current = new(); }
     }
 
     public async Task SaveAsync()
     {
+        await _saveLock.WaitAsync().ConfigureAwait(false);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             await using var fs = File.Create(SettingsPath);
-            await JsonSerializer.SerializeAsync(fs, Current, JsonOpts);
+            await JsonSerializer.SerializeAsync(fs, Current, JsonOpts).ConfigureAwait(false);
         }
         catch { /* best-effort */ }
+        finally
+        {
+            _saveLock.Release();
+        }
     }
 }

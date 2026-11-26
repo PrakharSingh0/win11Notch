@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Input;
-using Win11Notch.Core.Win32;
 using Win11Notch.ViewModels;
 
 namespace Win11Notch.Views;
@@ -16,23 +15,21 @@ public partial class SettingsWindow : Window
         InitializeComponent();
 
         Loaded += OnLoaded;
-        SourceInitialized += OnSourceInitialized;
-    }
-
-    private void OnSourceInitialized(object? sender, EventArgs e)
-    {
-        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        AcrylicHelper.ApplyLegacyAcrylic(hwnd);
+        PreviewKeyDown += OnPreviewKeyDown;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _vm.RefreshDiagnostics();
+    }
 
-        // Sync radio buttons with current dock edge
-        RadioTop.IsChecked   = _vm.DockEdge == "Top";
-        RadioLeft.IsChecked  = _vm.DockEdge == "Left";
-        RadioRight.IsChecked = _vm.DockEdge == "Right";
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            Hide();
+            e.Handled = true;
+        }
     }
 
     private void OnTitleBarMouseDown(object sender, MouseButtonEventArgs e)
@@ -47,8 +44,4 @@ public partial class SettingsWindow : Window
     {
         Hide();
     }
-
-    private void OnDockTopChecked(object sender, RoutedEventArgs e)   => _vm.DockEdge = "Top";
-    private void OnDockLeftChecked(object sender, RoutedEventArgs e)  => _vm.DockEdge = "Left";
-    private void OnDockRightChecked(object sender, RoutedEventArgs e) => _vm.DockEdge = "Right";
 }

@@ -24,7 +24,7 @@ public enum ShareLaunchOutcome
 /// {AD54D7CA-052D-4730-B0F2-2BA34D3438DC}) with automatic fallback to Windows 11's native Share UI,
 /// clipboard-to-file staging, and transfer history persistence.
 /// </summary>
-public sealed class QuickShareService
+public sealed class QuickShareService : IDisposable
 {
     private const int MaxHistory = 20;
     private static readonly Guid ClsidQuickShareExplorerCommand = new("AD54D7CA-052D-4730-B0F2-2BA34D3438DC");
@@ -137,7 +137,9 @@ public sealed class QuickShareService
 
         try
         {
-            IsQuickShareRunning = Process.GetProcessesByName("nearby_share").Length > 0;
+            var procs = Process.GetProcessesByName("nearby_share");
+            IsQuickShareRunning = procs.Length > 0;
+            foreach (var p in procs) p.Dispose();
         }
         catch
         {
@@ -172,7 +174,7 @@ public sealed class QuickShareService
             {
                 if (latestItem.IsImage && latestItem.ImagePngBytes is { Length: > 0 })
                 {
-                    string file = Path.Combine(_tempShareDir, $"clipboard_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+                    string file = Path.Combine(_tempShareDir, $"clipboard_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png");
                     File.WriteAllBytes(file, latestItem.ImagePngBytes);
                     AddPaths(new[] { file });
                     return true;
@@ -181,7 +183,7 @@ public sealed class QuickShareService
                 if (!string.IsNullOrWhiteSpace(latestItem.Text))
                 {
                     string prefix = latestItem.IsUrl ? "shared_link" : "shared_text";
-                    string file = Path.Combine(_tempShareDir, $"{prefix}_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                    string file = Path.Combine(_tempShareDir, $"{prefix}_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt");
                     File.WriteAllText(file, latestItem.Text, Encoding.UTF8);
                     AddPaths(new[] { file });
                     return true;
@@ -208,7 +210,7 @@ public sealed class QuickShareService
                 string text = System.Windows.Clipboard.GetText();
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    string file = Path.Combine(_tempShareDir, $"shared_text_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+                    string file = Path.Combine(_tempShareDir, $"shared_text_{DateTime.Now:yyyyMMdd_HHmmss_fff}.txt");
                     File.WriteAllText(file, text, Encoding.UTF8);
                     AddPaths(new[] { file });
                     return true;
@@ -391,31 +393,44 @@ public sealed class QuickShareService
             var iid = IidDataTransferManager;
             IntPtr dtmPtr = interop.GetForWindow(_windowHandle, ref iid);
             if (dtmPtr == IntPtr.Zero) return false;
-
-            if (_dtm == null)
+            try
             {
-                _dtm = WinRT.MarshalInspectable<DataTransferManager>.FromAbi(dtmPtr);
-                _dtm.DataRequested += (_, args) =>
+                if (_dtm == null)
                 {
-                    var req = args.Request;
-                    req.Data.Properties.Title = "Win11Notch File Share";
-                    req.Data.Properties.Description = "Share files";
-                    if (_preparedStorageItems.Count > 0)
-                    {
-                        req.Data.SetStorageItems(_preparedStorageItems);
-                    }
-                };
-            }
+                    _dtm = WinRT.MarshalInspectable<DataTransferManager>.FromAbi(dtmPtr);
+                    _dtm.DataRequested += OnDataRequested;
+                }
 
-            _preparedStorageItems = storageItems;
-            interop.ShowShareUIForWindow(_windowHandle);
-            return true;
+                _preparedStorageItems = storageItems;
+                interop.ShowShareUIForWindow(_windowHandle);
+                return true;
+            }
+            finally
+            {
+                Marshal.Release(dtmPtr);
+            }
         }
         catch
         {
             return false;
         }
     }
+
+    private void OnDataRequested(DataTransferManager sender, DataRequestedEventArgs args)
+    {
+        var req = args.Request;
+        req.Data.Properties.Title = "Win11Notch File Share";
+        req.Data.Properties.Description = "Share files";
+        if (_preparedStorageItems.Count > 0)
+        {
+            req.Data.SetStorageItems(_preparedStorageItems);
+        }
+    }
+
+    private static readonly JsonSerializerOptions IndentedJsonOpts = new() { WriteIndented = true };
+    private bool _use24HourClock;
+
+    public void SetClockFormat(bool use24Hour) => _use24HourClock = use24Hour;
 
     private void RecordHistory(List<string> paths, string badge)
     {
@@ -424,6 +439,7 @@ public sealed class QuickShareService
         string title = paths.Count == 1 ? firstName : $"{firstName} +{paths.Count - 1} more";
         string countLabel = paths.Count == 1 ? "1 item" : $"{paths.Count} items";
         string sizeLabel = totalBytes > 0 ? $" • {ShareQueueItem.FormatBytes(totalBytes)}" : string.Empty;
+        string timeFmt = _use24HourClock ? "HH:mm" : "h:mm tt";
 
         History.Insert(0, new ShareHistoryEntry
         {
@@ -432,7 +448,7 @@ public sealed class QuickShareService
             SummaryText   = $"{countLabel}{sizeLabel}",
             MethodBadge   = badge,
             Timestamp     = DateTime.Now,
-            TimestampText = DateTime.Now.ToString("h:mm tt")
+            TimestampText = DateTime.Now.ToString(timeFmt)
         });
 
         while (History.Count > MaxHistory)
@@ -463,8 +479,25 @@ public sealed class QuickShareService
     {
         try
         {
-            var json = JsonSerializer.Serialize(History.ToList(), new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(History.ToList(), IndentedJsonOpts);
             File.WriteAllText(_historyFilePath, json);
+        }
+        catch { }
+    }
+
+    public void Dispose()
+    {
+        if (_dtm != null)
+        {
+            try { _dtm.DataRequested -= OnDataRequested; } catch { }
+            _dtm = null;
+        }
+        try
+        {
+            if (Directory.Exists(_tempShareDir))
+            {
+                Directory.Delete(_tempShareDir, recursive: true);
+            }
         }
         catch { }
     }

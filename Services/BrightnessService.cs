@@ -40,8 +40,9 @@ public sealed class BrightnessService : IDisposable
 
     private byte[]? _supportedWmiLevels;
     private int _pendingTarget = -1;
+    private int _pendingMonitorIndex;
     private bool _isWriting;
-    private bool _isRefreshing;
+    private int _isRefreshingFlag;
     private bool _watcherStarted;
     private volatile bool _disposed;
     private long _lastLocalWriteTicks;
@@ -60,8 +61,7 @@ public sealed class BrightnessService : IDisposable
 
     public void RefreshBrightnessAsync(int monitorIndex = 0)
     {
-        if (_disposed || _isRefreshing) return;
-        _isRefreshing = true;
+        if (_disposed || Interlocked.CompareExchange(ref _isRefreshingFlag, 1, 0) != 0) return;
 
         _ = Task.Run(() =>
         {
@@ -72,33 +72,29 @@ public sealed class BrightnessService : IDisposable
 
                 if (preferDdcFirst && target != null && target.Handle != IntPtr.Zero && TryReadDdcBrightness(target.Handle, out int extVal))
                 {
-                    StatusTooltip = $"Display Brightness ({extVal}% via DDC/CI)";
-                    PublishBrightness(extVal, supported: true);
+                    PublishBrightness(extVal, supported: true, customTooltip: $"Display Brightness ({extVal}% via DDC/CI)");
                     return;
                 }
 
                 if (TryReadWmiBrightness(out int wmiVal))
                 {
                     EnsureWmiWatcherStarted();
-                    StatusTooltip = $"Display Brightness ({wmiVal}%)";
-                    PublishBrightness(wmiVal, supported: true);
+                    PublishBrightness(wmiVal, supported: true, customTooltip: $"Display Brightness ({wmiVal}%)");
                     return;
                 }
 
                 if (!preferDdcFirst && target != null && target.Handle != IntPtr.Zero && TryReadDdcBrightness(target.Handle, out int ddcVal))
                 {
-                    StatusTooltip = $"Display Brightness ({ddcVal}% via DDC/CI)";
-                    PublishBrightness(ddcVal, supported: true);
+                    PublishBrightness(ddcVal, supported: true, customTooltip: $"Display Brightness ({ddcVal}% via DDC/CI)");
                     return;
                 }
 
-                StatusTooltip = "Brightness unavailable (DDC/CI not supported on this display)";
-                PublishBrightness(CurrentBrightness, supported: false);
+                PublishBrightness(CurrentBrightness, supported: false, customTooltip: "Brightness unavailable (DDC/CI not supported on this display)");
             }
             catch { }
             finally
             {
-                _isRefreshing = false;
+                Interlocked.Exchange(ref _isRefreshingFlag, 0);
             }
         });
     }
@@ -115,6 +111,7 @@ public sealed class BrightnessService : IDisposable
         lock (_writeLock)
         {
             _pendingTarget = clamped;
+            _pendingMonitorIndex = monitorIndex;
             if (_isWriting) return;
             _isWriting = true;
         }
@@ -126,9 +123,11 @@ public sealed class BrightnessService : IDisposable
                 while (!_disposed)
                 {
                     int valueToApply;
+                    int targetMonIdx;
                     lock (_writeLock)
                     {
                         valueToApply = _pendingTarget;
+                        targetMonIdx = _pendingMonitorIndex;
                         _pendingTarget = -1;
                         if (valueToApply < 0)
                         {
@@ -138,7 +137,7 @@ public sealed class BrightnessService : IDisposable
                     }
 
                     Interlocked.Exchange(ref _lastLocalWriteTicks, Environment.TickCount64);
-                    var target = _monitorService.GetTargetMonitor(monitorIndex);
+                    var target = _monitorService.GetTargetMonitor(targetMonIdx);
                     bool preferDdcFirst = target is { IsPrimary: false };
                     bool ok = false;
 
@@ -168,18 +167,22 @@ public sealed class BrightnessService : IDisposable
         });
     }
 
-    private void PublishBrightness(int value, bool supported, bool fromExternalEvent = false)
+    private void PublishBrightness(int value, bool supported, bool fromExternalEvent = false, string? customTooltip = null)
     {
         if (_disposed) return;
-        IsBrightnessSupported = supported;
-        CurrentBrightness = Math.Clamp(value, 0, 100);
-        if (supported) StatusTooltip = $"Display Brightness ({CurrentBrightness}%)";
+        int clamped = Math.Clamp(value, 0, 100);
+        string tooltip = customTooltip ?? (supported ? $"Display Brightness ({clamped}%)" : StatusTooltip);
+
         Application.Current?.Dispatcher?.InvokeAsync(() =>
         {
-            BrightnessChanged?.Invoke(CurrentBrightness);
+            if (_disposed) return;
+            IsBrightnessSupported = supported;
+            CurrentBrightness = clamped;
+            StatusTooltip = tooltip;
+            BrightnessChanged?.Invoke(clamped);
             if (fromExternalEvent)
             {
-                ExternalBrightnessChanged?.Invoke(CurrentBrightness);
+                ExternalBrightnessChanged?.Invoke(clamped);
             }
         });
     }
@@ -204,20 +207,30 @@ public sealed class BrightnessService : IDisposable
 
     private void WatchWmiBrightnessEvents()
     {
+        object? locatorObj = null;
+        object? svcObj = null;
+        object? eventSourceObj = null;
         try
         {
             var locatorType = Type.GetTypeFromProgID("WbemScripting.SWbemLocator");
             if (locatorType == null) return;
 
-            dynamic locator = Activator.CreateInstance(locatorType)!;
-            dynamic svc = locator.ConnectServer(".", @"root\wmi");
-            dynamic eventSource = svc.ExecNotificationQuery("SELECT * FROM WmiMonitorBrightnessEvent");
+            locatorObj = Activator.CreateInstance(locatorType);
+            if (locatorObj == null) return;
+            dynamic locator = locatorObj;
+            svcObj = locator.ConnectServer(".", @"root\wmi");
+            dynamic svc = svcObj;
+            eventSourceObj = svc.ExecNotificationQuery("SELECT * FROM WmiMonitorBrightnessEvent");
+            dynamic eventSource = eventSourceObj;
 
             while (!_disposed)
             {
+                object? evObj = null;
                 try
                 {
-                    dynamic ev = eventSource.NextEvent(1500);
+                    evObj = eventSource.NextEvent(4500);
+                    if (evObj == null) continue;
+                    dynamic ev = evObj;
                     object? valObj = GetWmiProp(ev, "Brightness");
                     if (valObj == null) continue;
 
@@ -239,68 +252,132 @@ public sealed class BrightnessService : IDisposable
                 {
                     break;
                 }
+                finally
+                {
+                    ReleaseComSafe(evObj);
+                }
             }
         }
         catch { }
+        finally
+        {
+            ReleaseComSafe(eventSourceObj);
+            ReleaseComSafe(svcObj);
+            ReleaseComSafe(locatorObj);
+        }
     }
 
     private bool TryReadWmiBrightness(out int percent)
     {
         percent = CurrentBrightness;
+        object? locatorObj = null;
+        object? svcObj = null;
+        object? itemsObj = null;
         try
         {
             var locatorType = Type.GetTypeFromProgID("WbemScripting.SWbemLocator");
             if (locatorType == null) return false;
 
-            dynamic locator = Activator.CreateInstance(locatorType)!;
-            dynamic svc = locator.ConnectServer(".", @"root\wmi");
-            dynamic items = svc.ExecQuery("SELECT * FROM WmiMonitorBrightness");
+            locatorObj = Activator.CreateInstance(locatorType);
+            if (locatorObj == null) return false;
+            dynamic locator = locatorObj;
+            svcObj = locator.ConnectServer(".", @"root\wmi");
+            dynamic svc = svcObj;
+            itemsObj = svc.ExecQuery("SELECT * FROM WmiMonitorBrightness");
+            dynamic items = itemsObj;
             foreach (var item in items)
             {
-                object? activeObj = GetWmiProp(item, "Active");
-                if (activeObj is bool active && !active) continue;
+                try
+                {
+                    object? activeObj = GetWmiProp(item, "Active");
+                    if (activeObj is bool active && !active) continue;
 
-                object? curObj = GetWmiProp(item, "CurrentBrightness");
-                if (curObj == null) continue;
+                    object? curObj = GetWmiProp(item, "CurrentBrightness");
+                    if (curObj == null) continue;
 
-                percent = Math.Clamp(Convert.ToInt32(curObj), 0, 100);
-                CacheSupportedLevels(GetWmiProp(item, "Level"));
-                return true;
+                    percent = Math.Clamp(Convert.ToInt32(curObj), 0, 100);
+                    CacheSupportedLevels(GetWmiProp(item, "Level"));
+                    return true;
+                }
+                finally
+                {
+                    ReleaseComSafe(item);
+                }
             }
         }
         catch { }
+        finally
+        {
+            ReleaseComSafe(itemsObj);
+            ReleaseComSafe(svcObj);
+            ReleaseComSafe(locatorObj);
+        }
         return false;
     }
 
     private bool TryWriteWmiBrightness(int percent)
     {
+        object? locatorObj = null;
+        object? svcObj = null;
+        object? itemsObj = null;
         try
         {
             var locatorType = Type.GetTypeFromProgID("WbemScripting.SWbemLocator");
             if (locatorType == null) return false;
 
             byte levelToApply = SnapToSupportedLevel(percent);
-            dynamic locator = Activator.CreateInstance(locatorType)!;
-            dynamic svc = locator.ConnectServer(".", @"root\wmi");
-            dynamic items = svc.ExecQuery("SELECT * FROM WmiMonitorBrightnessMethods");
+            locatorObj = Activator.CreateInstance(locatorType);
+            if (locatorObj == null) return false;
+            dynamic locator = locatorObj;
+            svcObj = locator.ConnectServer(".", @"root\wmi");
+            dynamic svc = svcObj;
+            itemsObj = svc.ExecQuery("SELECT * FROM WmiMonitorBrightnessMethods");
+            dynamic items = itemsObj;
             bool applied = false;
             foreach (var item in items)
             {
-                object? activeObj = GetWmiProp(item, "Active");
-                if (activeObj is bool active && !active) continue;
+                object? methodObj = null;
+                object? inParamsObj = null;
+                try
+                {
+                    object? activeObj = GetWmiProp(item, "Active");
+                    if (activeObj is bool active && !active) continue;
 
-                dynamic method = item.Methods_.Item("WmiSetBrightness");
-                dynamic inParams = method.InParameters.SpawnInstance_();
-                inParams.Properties_.Item("Timeout").Value = 1;
-                inParams.Properties_.Item("Brightness").Value = levelToApply;
-                item.ExecMethod_("WmiSetBrightness", inParams);
-                applied = true;
+                    methodObj = item.Methods_.Item("WmiSetBrightness");
+                    dynamic method = methodObj;
+                    inParamsObj = method.InParameters.SpawnInstance_();
+                    dynamic inParams = inParamsObj;
+                    inParams.Properties_.Item("Timeout").Value = 1;
+                    inParams.Properties_.Item("Brightness").Value = levelToApply;
+                    item.ExecMethod_("WmiSetBrightness", inParams);
+                    applied = true;
+                }
+                finally
+                {
+                    ReleaseComSafe(inParamsObj);
+                    ReleaseComSafe(methodObj);
+                    ReleaseComSafe(item);
+                }
             }
             return applied;
         }
         catch
         {
             return false;
+        }
+        finally
+        {
+            ReleaseComSafe(itemsObj);
+            ReleaseComSafe(svcObj);
+            ReleaseComSafe(locatorObj);
+        }
+    }
+
+    private static void ReleaseComSafe(object? comObj)
+    {
+        if (comObj != null && Marshal.IsComObject(comObj))
+        {
+            try { Marshal.FinalReleaseComObject(comObj); } catch { }
         }
     }
 

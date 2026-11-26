@@ -16,6 +16,7 @@ public sealed class NotchStateMachine
     private bool             _isFullscreenStealth;
     private bool             _isContextHidden;
     private bool             _isPinnedReminderAlertActive;
+    private bool             _isPointerInside;
     private DispatcherTimer? _dwellTimer;
     private DispatcherTimer? _graceTimer;
 
@@ -41,6 +42,7 @@ public sealed class NotchStateMachine
     /// <summary>Call when the mouse enters the notch window.</summary>
     public void OnMouseEnter()
     {
+        _isPointerInside = true;
         if (_state is NotchState.PeekExpanded or NotchState.Stealth) return;
         _graceTimer?.Stop();
         if (_state == NotchState.CollapsedHover) return;
@@ -50,6 +52,7 @@ public sealed class NotchStateMachine
     /// <summary>Call when the mouse leaves the notch window.</summary>
     public void OnMouseLeave()
     {
+        _isPointerInside = false;
         _dwellTimer?.Stop();
         if (_state != NotchState.CollapsedHover) return;
         RestartGraceTimer();
@@ -92,6 +95,23 @@ public sealed class NotchStateMachine
         _dwellTimer?.Stop();
         _graceTimer?.Stop();
         Transition(RestingState);
+    }
+
+    /// <summary>Returns a transient toast banner back to RestingState unless the pointer is currently hovering.</summary>
+    public void DismissToastBanner()
+    {
+        if (_state == NotchState.CollapsedHover && !_isPointerInside)
+        {
+            _dwellTimer?.Stop();
+            _graceTimer?.Stop();
+            Transition(RestingState);
+        }
+    }
+
+    public void StopTimers()
+    {
+        _dwellTimer?.Stop();
+        _graceTimer?.Stop();
     }
 
     /// <summary>Synchronizes the current non-Peek state when settings like AlwaysShowHoverCapsule change.</summary>
@@ -185,29 +205,35 @@ public sealed class NotchStateMachine
 
     private void RestartDwellTimer()
     {
-        _dwellTimer?.Stop();
-        _dwellTimer = new DispatcherTimer
-            { Interval = TimeSpan.FromMilliseconds(_settings.Current.HoverDwellMs) };
-        _dwellTimer.Tick += (_, _) =>
+        if (_dwellTimer == null)
         {
-            _dwellTimer!.Stop();
-            if (_state == NotchState.Idle)
-                Transition(NotchState.CollapsedHover);
-        };
+            _dwellTimer = new DispatcherTimer();
+            _dwellTimer.Tick += (_, _) =>
+            {
+                _dwellTimer!.Stop();
+                if (_state == NotchState.Idle)
+                    Transition(NotchState.CollapsedHover);
+            };
+        }
+        _dwellTimer.Stop();
+        _dwellTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(20, _settings.Current.HoverDwellMs));
         _dwellTimer.Start();
     }
 
     private void RestartGraceTimer()
     {
-        _graceTimer?.Stop();
-        _graceTimer = new DispatcherTimer
-            { Interval = TimeSpan.FromMilliseconds(_settings.Current.ExitGraceMs) };
-        _graceTimer.Tick += (_, _) =>
+        if (_graceTimer == null)
         {
-            _graceTimer!.Stop();
-            if (_state == NotchState.CollapsedHover)
-                Transition(RestingState);
-        };
+            _graceTimer = new DispatcherTimer();
+            _graceTimer.Tick += (_, _) =>
+            {
+                _graceTimer!.Stop();
+                if (_state == NotchState.CollapsedHover)
+                    Transition(RestingState);
+            };
+        }
+        _graceTimer.Stop();
+        _graceTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(50, _settings.Current.ExitGraceMs));
         _graceTimer.Start();
     }
 

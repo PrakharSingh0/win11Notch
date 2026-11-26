@@ -44,6 +44,10 @@ public partial class App : Application
 
     private TrayService?               _trayService;
     private NotchWindow?               _notchWindow;
+    private NotchViewModel?            _notchVm;
+    private NotchStateMachine?         _stateMachine;
+    private TimerService?              _timerService;
+    private QuickShareService?         _quickShareService;
     private MediaService?              _mediaService;
     private AudioService?              _audioService;
     private AudioHudService?           _audioHud;
@@ -128,17 +132,18 @@ public partial class App : Application
 
             var hotkeyService     = new HotkeyService();
             var fullscreenService = new FullscreenDetectorService(stateMachine);
-            var timerService      = new TimerService();
-            timerService.ApplySettings(settings.Current);
+            _stateMachine         = stateMachine;
+            _timerService         = new TimerService();
+            _timerService.ApplySettings(settings.Current);
             _powerAwakeService    = new PowerAwakeService();
             var scratchpadService = new ScratchpadService();
             var calendarService   = new CalendarService();
-            var quickShareService = new QuickShareService();
+            _quickShareService    = new QuickShareService();
             var homeLayoutService = new HomeLayoutService();
-            _brightnessService = new BrightnessService(monitor);
+            _brightnessService    = new BrightnessService(monitor);
             var colorPickerService = new ColorPickerService();
 
-            var notchVm = new NotchViewModel(
+            _notchVm = new NotchViewModel(
                 stateMachine,
                 _mediaService,
                 shelfService,
@@ -146,26 +151,25 @@ public partial class App : Application
                 _resourceMonitor,
                 clipboardService,
                 screenCapture,
-                timerService,
+                _timerService,
                 settings,
                 _powerAwakeService,
                 scratchpadService,
                 calendarService,
-                quickShareService,
+                _quickShareService,
                 homeLayoutService,
                 _brightnessService,
                 colorPickerService);
 
-            _islandNotifications = new IslandNotificationService(stateMachine, _mediaService, settings, notchVm);
-            _audioHud            = new AudioHudService(stateMachine, _audioService, notchVm);
+            _islandNotifications = new IslandNotificationService(stateMachine, _mediaService, settings, _notchVm);
+            _audioHud            = new AudioHudService(stateMachine, _audioService, _notchVm);
 
             var trayVm     = new TrayViewModel(stateMachine, settings);
-            var settingsVm = new SettingsViewModel(settings, startupService);
-            settingsVm.SettingsChanged += () => timerService.ApplySettings(settings.Current);
+            var settingsVm = new SettingsViewModel(settings, startupService, monitor);
 
             Log("Constructing NotchWindow...");
             _notchWindow = new NotchWindow(
-                notchVm,
+                _notchVm,
                 stateMachine,
                 monitor,
                 settings,
@@ -174,14 +178,14 @@ public partial class App : Application
                 shelfService,
                 settingsVm,
                 clipboardService,
-                quickShareService);
+                _quickShareService);
 
             Log("Showing NotchWindow...");
             _notchWindow.Show();
             Log("NotchWindow shown.");
 
             Log("Initializing TrayService...");
-            _trayService = new TrayService(trayVm, _notchWindow, stateMachine, settings, monitor);
+            _trayService = new TrayService(trayVm, _notchWindow, stateMachine, settings, monitor, settingsVm);
             _trayService.Initialize();
 
             // Wire single-instance & JumpList actions (--toggle, --settings, --about)
@@ -244,6 +248,10 @@ public partial class App : Application
     {
         Log($"=== OnExit called: Application exiting (ExitCode={e.ApplicationExitCode}) ===");
         SingleInstanceGuard.Release();
+        _stateMachine?.StopTimers();
+        _timerService?.Stop();
+        _notchVm?.Dispose();
+        _quickShareService?.Dispose();
         _trayService?.Dispose();
         _brightnessService?.Dispose();
         _audioHud?.Dispose();

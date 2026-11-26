@@ -94,7 +94,9 @@ public partial class ColorLoupeWindow : Window
         string hex = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
         HexText.Text = hex;
         RgbText.Text = $"{c.R}, {c.G}, {c.B}";
-        ColorSwatch.Background = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        var swatch = new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B));
+        swatch.Freeze();
+        ColorSwatch.Background = swatch;
 
         // Crop 11x11 patch centered around cursor pixel safely inside bounds
         int half = ZoomPatchSize / 2;
@@ -107,6 +109,14 @@ public partial class ColorLoupeWindow : Window
         {
             var crop = new CroppedBitmap(_screenSource, new Int32Rect(cropX, cropY, cropW, cropH));
             ZoomImage.Source = crop;
+
+            // Shift center reticle to stay aligned on the exact cursor pixel near screen edges
+            double cellW = 99.0 / cropW;
+            double cellH = 99.0 / cropH;
+            double centerCropX = (cropW - 1) / 2.0;
+            double centerCropY = (cropH - 1) / 2.0;
+            ReticleShift.X = ((px - cropX) - centerCropX) * cellW;
+            ReticleShift.Y = ((py - cropY) - centerCropY) * cellH;
         }
 
         // Convert physical cursor coordinates to WPF DIPs relative to overlay window
