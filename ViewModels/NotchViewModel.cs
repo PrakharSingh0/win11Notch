@@ -1,11 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
+using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Win11Notch.Core.Settings;
 using Win11Notch.Core.State;
 using Win11Notch.Models;
@@ -47,23 +50,174 @@ public sealed partial class NotchViewModel : ObservableObject
     public TimerService Timer => _timerService;
     public CalendarService Calendar => _calendarService;
 
+    public const int TabHome      = 0;
+    public const int TabMedia     = 1;
+    public const int TabTimers    = 2;
+    public const int TabShelf     = 3;
+    public const int TabCalendar  = 4;
+    public const int TabResources = 5;
+    public const int TabTools     = 6;
+    public const int TabShare     = 7;
+
     [ObservableProperty] private NotchState _currentState = NotchState.Idle;
     [ObservableProperty] private string _clockText = string.Empty;
     [ObservableProperty] private string _dateText = string.Empty;
-    [ObservableProperty] private int _selectedTabIndex = 0;
+    [ObservableProperty] private int _selectedTabIndex = TabHome;
     [ObservableProperty] private int _shelfSubTabIndex = 0;
     [ObservableProperty] private int _clipboardFilterIndex = 0; // 0: All, 1: Text, 2: Images, 3: URLs
 
-    // Calendar quick composer properties
+    // Home Dashboard overview properties
+    [ObservableProperty] private string _homeDayNumberText = DateTime.Now.ToString("dd");
+    [ObservableProperty] private string _homeDayOfWeekText = DateTime.Now.ToString("dddd");
+    [ObservableProperty] private string _homeMonthYearText = DateTime.Now.ToString("MMMM yyyy");
+    [ObservableProperty] private string _homeTodaySummaryText = "Clear schedule today";
+    [ObservableProperty] private bool   _hasHomeUpcomingItems;
+    [ObservableProperty] private string _homeShelfSummaryText = "Drop files to stage";
+    [ObservableProperty] private string _homeClipboardCountText = "0 clips";
+    [ObservableProperty] private string _homeTimerSummaryText = "25:00 ready";
+    [ObservableProperty] private string _homeScratchpadPreviewText = "Quick Notes";
+    public ObservableCollection<CalendarItem> HomeUpcomingItems { get; } = new();
+
+    // Calendar quick composer & filter properties
     [ObservableProperty] private bool _isAddingCalendarEvent;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ComposerSaveButtonText))]
+    private bool _isEditingCalendarItem;
+    private CalendarItem? _editingCalendarItem;
+
     [ObservableProperty] private string _newCalendarTitle = string.Empty;
     [ObservableProperty] private string _newCalendarTime = "09:00";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NewCalendarHourText))]
+    private int _newCalendarDisplayHour = 9;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NewCalendarMinuteText))]
+    private int _newCalendarMinute = 0;
+
+    [ObservableProperty] private string _newCalendarHourInput = "9";
+    [ObservableProperty] private string _newCalendarMinuteInput = "00";
+    private bool _isSyncingTimeInputs;
+
+    partial void OnNewCalendarHourInputChanged(string value)
+    {
+        if (_isSyncingTimeInputs) return;
+        string digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (!int.TryParse(digits, out int h)) return;
+
+        if (Use24HourClock)
+        {
+            NewCalendarDisplayHour = Math.Clamp(h, 0, 23);
+        }
+        else if (h >= 13 && h <= 23)
+        {
+            NewCalendarDisplayHour = h - 12;
+            NewCalendarIsPm        = true;
+        }
+        else if (h == 0)
+        {
+            NewCalendarDisplayHour = 12;
+            NewCalendarIsPm        = false;
+        }
+        else
+        {
+            NewCalendarDisplayHour = Math.Clamp(h, 1, 12);
+        }
+
+        RebuildCanonicalTimeFromPicker(syncInputs: false);
+    }
+
+    partial void OnNewCalendarMinuteInputChanged(string value)
+    {
+        if (_isSyncingTimeInputs) return;
+        string digits = new string((value ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (!int.TryParse(digits, out int m)) return;
+
+        NewCalendarMinute = Math.Clamp(m, 0, 59);
+        RebuildCanonicalTimeFromPicker(syncInputs: false);
+    }
+
+    public void NormalizeTimeInputs()
+    {
+        _isSyncingTimeInputs = true;
+        try
+        {
+            NewCalendarHourInput   = Use24HourClock ? NewCalendarDisplayHour.ToString("00") : NewCalendarDisplayHour.ToString();
+            NewCalendarMinuteInput = NewCalendarMinute.ToString("00");
+        }
+        finally
+        {
+            _isSyncingTimeInputs = false;
+        }
+    }
+
+    [ObservableProperty] private bool _newCalendarIsPm;
     [ObservableProperty] private bool _newCalendarIsAllDay;
-    [ObservableProperty] private bool _newCalendarIsReminder = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NewCalendarIsEvent))]
+    [NotifyPropertyChangedFor(nameof(ComposerModeHintText))]
+    private bool _newCalendarIsReminder = true;
+
     [ObservableProperty] private string _newCalendarAccentHex = "#FF5E36";
+    [ObservableProperty] private int _newCalendarDurationMinutes = 60;
+    [ObservableProperty] private string _newCalendarLocation = string.Empty;
+    [ObservableProperty] private CalendarRepeatRule _newCalendarRepeatRule = CalendarRepeatRule.Once;
+    [ObservableProperty] private bool _newCalendarIsHighPriority;
+    [ObservableProperty] private bool _newCalendarPlayChime = true;
+    [ObservableProperty] private int _calendarAgendaFilterIndex = 0;
 
     public bool NewCalendarIsEvent => !NewCalendarIsReminder;
-    partial void OnNewCalendarIsReminderChanged(bool value) => OnPropertyChanged(nameof(NewCalendarIsEvent));
+    public bool Use24HourClock => _settingsService.Current.Use24HourClock;
+    public string NewCalendarHourText => Use24HourClock ? NewCalendarDisplayHour.ToString("00") : NewCalendarDisplayHour.ToString();
+    public string NewCalendarMinuteText => NewCalendarMinute.ToString("00");
+    public string ComposerSaveButtonText => IsEditingCalendarItem ? "Update" : "Save";
+    public string ComposerModeHintText => NewCalendarIsReminder
+        ? "Stays pinned on the Notch pill until Done, Snoozed, or Dismissed"
+        : "Blocks agenda time with range & live countdown";
+
+    partial void OnCalendarAgendaFilterIndexChanged(int value)
+    {
+        _calendarService.AgendaFilter = value switch
+        {
+            1 => CalendarAgendaFilter.Reminders,
+            2 => CalendarAgendaFilter.Events,
+            _ => CalendarAgendaFilter.All
+        };
+    }
+
+    // Persistent Active Reminder Alert Queue (pinned on Notch Pill until dismissed)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveReminderTitle))]
+    [NotifyPropertyChangedFor(nameof(ActiveReminderDetailText))]
+    [NotifyPropertyChangedFor(nameof(ActiveReminderAccentBrush))]
+    private CalendarItem? _activeReminderAlert;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMultiplePendingAlerts))]
+    [NotifyPropertyChangedFor(nameof(PendingAlertQueueBadge))]
+    private int _pendingReminderAlertCount;
+
+    [ObservableProperty] private bool _isReminderAlertActive;
+    public event Action<bool>? ReminderAlertActiveChanged;
+    partial void OnIsReminderAlertActiveChanged(bool value) => ReminderAlertActiveChanged?.Invoke(value);
+
+    public bool HasMultiplePendingAlerts => PendingReminderAlertCount > 1;
+    public string PendingAlertQueueBadge => PendingReminderAlertCount > 1 ? $"+{PendingReminderAlertCount - 1}" : string.Empty;
+    public string ActiveReminderTitle => ActiveReminderAlert?.Title ?? string.Empty;
+    public string ActiveReminderDetailText
+    {
+        get
+        {
+            if (ActiveReminderAlert == null) return string.Empty;
+            if (ActiveReminderAlert.IsOverdue && !string.IsNullOrEmpty(ActiveReminderAlert.RelativeStatusText))
+                return $"{ActiveReminderAlert.CompactTimeText} • {ActiveReminderAlert.RelativeStatusText}";
+            return ActiveReminderAlert.CompactTimeText;
+        }
+    }
+    public Brush ActiveReminderAccentBrush => CreateFrozenBrush(ActiveReminderAlert?.AccentHex ?? "#FF5E36");
+    public string SnoozeButtonLabel => $"+{Math.Clamp(_settingsService.Current.DefaultReminderSnoozeMinutes, 5, 60)}m";
 
     // Drag-and-drop split action overlay
     [ObservableProperty] private bool _isFileDragOverlayVisible;
@@ -261,9 +415,22 @@ public sealed partial class NotchViewModel : ObservableObject
     {
         CloseAllMenus();
         UpdateSpectrumState();
-        if (value == 6)
+        if (value == TabHome)
+        {
+            RefreshHomeDashboard();
+        }
+        else if (value == TabShare)
         {
             RefreshQuickShareState();
+        }
+    }
+
+    [RelayCommand]
+    private void NavigateToTab(object? tabParam)
+    {
+        if (int.TryParse(tabParam?.ToString(), out int idx))
+        {
+            SelectedTabIndex = Math.Clamp(idx, TabHome, TabShare);
         }
     }
 
@@ -301,9 +468,16 @@ public sealed partial class NotchViewModel : ObservableObject
         _colorPickerService = colorPickerService;
 
         _scratchpadText = _scratchpadService.Load();
+        _calendarService.ApplyClockFormat(_settingsService.Current.Use24HourClock);
         _powerAwakeService.AwakeStateChanged += awake => IsStayAwakeEnabled = awake;
         _calendarService.ReminderDue += OnCalendarReminderDue;
-        _calendarService.CalendarChanged += UpdateUpcomingReminder;
+        _calendarService.CalendarChanged += () =>
+        {
+            UpdateUpcomingReminder();
+            SyncActiveReminderAlerts(playChimeForNewTriggers: false);
+            ScheduleNextReminderCheck();
+            RefreshHomeDashboard();
+        };
         _brightnessService.BrightnessChanged += val =>
         {
             _isSyncingBrightness = true;
@@ -338,7 +512,14 @@ public sealed partial class NotchViewModel : ObservableObject
         };
         _brightnessService.RefreshBrightnessAsync(_settingsService.Current.TargetMonitorIndex);
         UpdateGreetingState(DateTime.Now, notifyRollover: false);
+        UpdateDateTimeFields(DateTime.Now);
         UpdateUpcomingReminder();
+        SystemEvents.PowerModeChanged += OnSystemPowerModeChanged;
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            SyncActiveReminderAlerts(playChimeForNewTriggers: true);
+            ScheduleNextReminderCheck();
+        }, DispatcherPriority.Background);
         _quickShareService.Queue.CollectionChanged += (_, _) => RefreshQuickShareState();
         _quickShareService.History.CollectionChanged += (_, _) => RefreshQuickShareState();
         RefreshQuickShareState();
@@ -350,6 +531,7 @@ public sealed partial class NotchViewModel : ObservableObject
             StopwatchText = _timerService.IslandTimerText;
             OnPropertyChanged(nameof(IsStopwatchRunning));
             OnPropertyChanged(nameof(StopwatchText));
+            RefreshHomeTimerSummary();
             NotifyIdlePresentationChanged();
         };
 
@@ -369,13 +551,19 @@ public sealed partial class NotchViewModel : ObservableObject
         {
             HasStagedFiles = _shelfService.Items.Count > 0;
             ShelfCountText = _shelfService.Items.Count > 0 ? $"{_shelfService.Items.Count}" : string.Empty;
+            RefreshHomeWorkspaceSummaries();
         };
         HasStagedFiles = _shelfService.Items.Count > 0;
         ShelfCountText = _shelfService.Items.Count > 0 ? $"{_shelfService.Items.Count}" : string.Empty;
 
         // Wire clipboard changes
-        _clipboardService.History.CollectionChanged += (_, _) => RefreshFilteredClipboard();
+        _clipboardService.History.CollectionChanged += (_, _) =>
+        {
+            RefreshFilteredClipboard();
+            RefreshHomeWorkspaceSummaries();
+        };
         RefreshFilteredClipboard();
+        RefreshHomeDashboard();
 
         // Sync initial volume and audio device
         _isSyncingVolume = true;
@@ -547,7 +735,7 @@ public sealed partial class NotchViewModel : ObservableObject
         double baseAmp = Math.Max(peak, 0.08);
         _wavePhase += 0.28;
 
-        if (CurrentState == NotchState.PeekExpanded && SelectedTabIndex == 0)
+        if (CurrentState == NotchState.PeekExpanded && SelectedTabIndex == TabMedia)
         {
             int n = WaveBars.Count;
             for (int i = 0; i < n; i++)
@@ -893,7 +1081,7 @@ public sealed partial class NotchViewModel : ObservableObject
         if (paths.Count == 0) return;
 
         _quickShareService.AddPaths(paths);
-        SelectedTabIndex = 6;
+        SelectedTabIndex = TabShare;
 
         var outcome = await _quickShareService.SendQueuedAsync();
         if (outcome != ShareLaunchOutcome.Failed)
@@ -1057,11 +1245,42 @@ public sealed partial class NotchViewModel : ObservableObject
     [RelayCommand]
     private void ToggleAddCalendarEvent()
     {
-        IsAddingCalendarEvent = !IsAddingCalendarEvent;
-        if (IsAddingCalendarEvent && string.IsNullOrWhiteSpace(NewCalendarTime))
+        if (IsAddingCalendarEvent)
         {
-            NewCalendarTime = DateTime.Now.AddMinutes(30).ToString("HH:mm");
+            IsAddingCalendarEvent = false;
+            ResetComposerState();
+            return;
         }
+
+        ResetComposerState();
+        var defaultTime = DateTime.Now.AddMinutes(30);
+        SyncPickerFromDateTime(defaultTime);
+        IsAddingCalendarEvent = true;
+    }
+
+    [RelayCommand]
+    private void EditCalendarItem(CalendarItem? item)
+    {
+        if (item == null) return;
+
+        _editingCalendarItem       = item;
+        IsEditingCalendarItem      = true;
+        NewCalendarTitle           = item.Title;
+        NewCalendarIsAllDay        = item.IsAllDay;
+        NewCalendarIsReminder      = item.IsReminder;
+        NewCalendarAccentHex       = item.AccentHex;
+        NewCalendarDurationMinutes = item.IsReminder ? 60 : Math.Max(15, item.DurationMinutes);
+        NewCalendarLocation        = item.Location;
+        NewCalendarRepeatRule      = item.RepeatRule;
+        NewCalendarIsHighPriority  = item.IsHighPriority;
+        NewCalendarPlayChime       = item.PlayChime;
+
+        if (item.TryGetTimeOfDay(out var tod))
+            SyncPickerFromDateTime(DateTime.Today.Add(tod));
+        else
+            SyncPickerFromDateTime(DateTime.Now.AddMinutes(30));
+
+        IsAddingCalendarEvent = true;
     }
 
     [RelayCommand]
@@ -1070,6 +1289,10 @@ public sealed partial class NotchViewModel : ObservableObject
         if (bool.TryParse(isReminderParam?.ToString(), out bool isReminder))
         {
             NewCalendarIsReminder = isReminder;
+            if (!IsEditingCalendarItem && NewCalendarAccentHex is "#FF5E36" or "#00E5FF")
+            {
+                NewCalendarAccentHex = isReminder ? "#FF5E36" : "#00E5FF";
+            }
         }
     }
 
@@ -1089,19 +1312,131 @@ public sealed partial class NotchViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void StepCalendarHour(object? deltaParam)
+    {
+        if (!int.TryParse(deltaParam?.ToString(), out int delta)) return;
+        NewCalendarIsAllDay = false;
+
+        if (Use24HourClock)
+        {
+            NewCalendarDisplayHour = (NewCalendarDisplayHour + delta + 24) % 24;
+        }
+        else
+        {
+            int idx = (NewCalendarDisplayHour - 1 + delta + 12) % 12;
+            NewCalendarDisplayHour = idx + 1;
+        }
+        RebuildCanonicalTimeFromPicker();
+    }
+
+    [RelayCommand]
+    private void StepCalendarMinute(object? deltaParam)
+    {
+        if (!int.TryParse(deltaParam?.ToString(), out int delta)) return;
+        NewCalendarIsAllDay = false;
+        NewCalendarMinute = (NewCalendarMinute + delta + 60) % 60;
+        RebuildCanonicalTimeFromPicker();
+    }
+
+    [RelayCommand]
+    private void SetCalendarMeridiem(object? isPmParam)
+    {
+        if (bool.TryParse(isPmParam?.ToString(), out bool isPm))
+        {
+            NewCalendarIsAllDay = false;
+            NewCalendarIsPm = isPm;
+            RebuildCanonicalTimeFromPicker();
+        }
+    }
+
+    [RelayCommand]
+    private void ApplyTimePreset(string? preset)
+    {
+        NewCalendarIsAllDay = false;
+        DateTime target = preset switch
+        {
+            "+15m"      => DateTime.Now.AddMinutes(15),
+            "+1h"       => DateTime.Now.AddHours(1),
+            "Evening"   => DateTime.Today.AddHours(17),
+            "Tonight"   => DateTime.Today.AddHours(20),
+            "Morning"   => DateTime.Today.AddHours(9),
+            _           => DateTime.Now.AddMinutes(30)
+        };
+        SyncPickerFromDateTime(target);
+    }
+
+    [RelayCommand]
+    private void SelectEventDuration(object? minutesParam)
+    {
+        if (int.TryParse(minutesParam?.ToString(), out int mins) && mins > 0)
+        {
+            NewCalendarDurationMinutes = mins;
+        }
+    }
+
+    [RelayCommand]
+    private void SetReminderRepeatRule(object? ruleParam)
+    {
+        if (Enum.TryParse<CalendarRepeatRule>(ruleParam?.ToString(), out var rule))
+        {
+            NewCalendarRepeatRule = rule;
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleCalendarHighPriority() => NewCalendarIsHighPriority = !NewCalendarIsHighPriority;
+
+    [RelayCommand]
+    private void ToggleCalendarPlayChime() => NewCalendarPlayChime = !NewCalendarPlayChime;
+
+    [RelayCommand]
+    private void SetCalendarAgendaFilter(object? filterParam)
+    {
+        if (int.TryParse(filterParam?.ToString(), out int idx))
+        {
+            CalendarAgendaFilterIndex = Math.Clamp(idx, 0, 2);
+        }
+    }
+
+    [RelayCommand]
     private void SaveNewCalendarItem()
     {
         if (string.IsNullOrWhiteSpace(NewCalendarTitle)) return;
 
-        _calendarService.AddItem(
-            NewCalendarTitle,
-            NewCalendarTime,
-            NewCalendarIsAllDay,
-            NewCalendarIsReminder,
-            NewCalendarAccentHex);
+        RebuildCanonicalTimeFromPicker();
 
-        NewCalendarTitle = string.Empty;
+        if (IsEditingCalendarItem && _editingCalendarItem != null)
+        {
+            _calendarService.UpdateItem(
+                _editingCalendarItem,
+                NewCalendarTitle,
+                NewCalendarTime,
+                NewCalendarIsAllDay,
+                NewCalendarIsReminder,
+                NewCalendarAccentHex,
+                NewCalendarDurationMinutes,
+                NewCalendarLocation,
+                NewCalendarRepeatRule,
+                NewCalendarIsHighPriority,
+                NewCalendarPlayChime);
+        }
+        else
+        {
+            _calendarService.AddItem(
+                NewCalendarTitle,
+                NewCalendarTime,
+                NewCalendarIsAllDay,
+                NewCalendarIsReminder,
+                NewCalendarAccentHex,
+                NewCalendarDurationMinutes,
+                NewCalendarLocation,
+                NewCalendarRepeatRule,
+                NewCalendarIsHighPriority,
+                NewCalendarPlayChime);
+        }
+
         IsAddingCalendarEvent = false;
+        ResetComposerState();
     }
 
     [RelayCommand]
@@ -1122,30 +1457,175 @@ public sealed partial class NotchViewModel : ObservableObject
         }
     }
 
-    private DispatcherTimer? _reminderToastTimer;
-
-    private void OnCalendarReminderDue(CalendarItem item)
+    [RelayCommand]
+    private void CompleteActiveReminder()
     {
+        if (ActiveReminderAlert is not { } current) return;
+        _calendarService.ToggleComplete(current);
+    }
+
+    [RelayCommand]
+    private void SnoozeActiveReminder()
+    {
+        if (ActiveReminderAlert is not { } current) return;
+        int snoozeMins = Math.Clamp(_settingsService.Current.DefaultReminderSnoozeMinutes, 5, 60);
+        _calendarService.SnoozeReminder(current, TimeSpan.FromMinutes(snoozeMins));
+    }
+
+    [RelayCommand]
+    private void DismissActiveReminder()
+    {
+        if (ActiveReminderAlert is not { } current) return;
+        _calendarService.DismissReminderAlert(current);
+    }
+
+    [RelayCommand]
+    private void SnoozeAllOverdue()
+    {
+        int snoozeMins = Math.Clamp(_settingsService.Current.DefaultReminderSnoozeMinutes, 5, 60);
+        _calendarService.SnoozeAllOverdueToday(TimeSpan.FromMinutes(snoozeMins));
+    }
+
+    private void ResetComposerState()
+    {
+        _editingCalendarItem       = null;
+        IsEditingCalendarItem      = false;
+        NewCalendarTitle           = string.Empty;
+        NewCalendarIsAllDay        = false;
+        NewCalendarIsReminder      = true;
+        NewCalendarAccentHex       = "#FF5E36";
+        NewCalendarDurationMinutes = 60;
+        NewCalendarLocation        = string.Empty;
+        NewCalendarRepeatRule      = CalendarRepeatRule.Once;
+        NewCalendarIsHighPriority  = false;
+        NewCalendarPlayChime       = true;
+    }
+
+    private void SyncPickerFromDateTime(DateTime dt)
+    {
+        if (Use24HourClock)
+        {
+            NewCalendarDisplayHour = dt.Hour;
+            NewCalendarIsPm        = dt.Hour >= 12;
+        }
+        else
+        {
+            NewCalendarIsPm        = dt.Hour >= 12;
+            int h12                = dt.Hour % 12;
+            NewCalendarDisplayHour = h12 == 0 ? 12 : h12;
+        }
+
+        NewCalendarMinute = dt.Minute;
+        RebuildCanonicalTimeFromPicker();
+    }
+
+    private void RebuildCanonicalTimeFromPicker(bool syncInputs = true)
+    {
+        int hour24;
+        if (Use24HourClock)
+        {
+            hour24 = Math.Clamp(NewCalendarDisplayHour, 0, 23);
+        }
+        else
+        {
+            int h12 = Math.Clamp(NewCalendarDisplayHour, 1, 12);
+            hour24 = NewCalendarIsPm
+                ? (h12 == 12 ? 12 : h12 + 12)
+                : (h12 == 12 ? 0 : h12);
+        }
+
+        int minute = Math.Clamp(NewCalendarMinute, 0, 59);
+        NewCalendarTime = $"{hour24:00}:{minute:00}";
+        if (syncInputs) NormalizeTimeInputs();
+    }
+
+    private DispatcherTimer? _reminderToastTimer;
+    private DispatcherTimer? _nextReminderTimer;
+    private int              _lastStatusRefreshMinute = -1;
+    private bool             _suppressChimeOnSync;
+
+    private void OnSystemPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != PowerModes.Resume) return;
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
-            PowerToastIconBrush = CreateFrozenBrush("#FF5E36");
-            PowerToastIcon = "\uE787";
-            PowerToastTitle = item.Title;
-            PowerToastDetail = item.DisplayTime;
-            IsPowerToastActive = true;
-
-            _reminderToastTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _reminderToastTimer.Stop();
-            _reminderToastTimer.Tick -= OnReminderToastTick;
-            _reminderToastTimer.Tick += OnReminderToastTick;
-            _reminderToastTimer.Start();
+            SyncActiveReminderAlerts(playChimeForNewTriggers: true);
+            ScheduleNextReminderCheck();
+            UpdateUpcomingReminder();
         });
     }
 
-    private void OnReminderToastTick(object? sender, EventArgs e)
+    private void OnCalendarReminderDue(CalendarItem item)
     {
-        _reminderToastTimer?.Stop();
-        IsPowerToastActive = false;
+        if (_suppressChimeOnSync) return;
+        if (_settingsService.Current.ReminderSoundChimesEnabled && item.PlayChime)
+        {
+            try { SystemSounds.Asterisk.Play(); } catch { }
+        }
+    }
+
+    private void SyncActiveReminderAlerts(bool playChimeForNewTriggers)
+    {
+        var now = DateTime.Now;
+        bool prevSuppress = _suppressChimeOnSync;
+        _suppressChimeOnSync = !playChimeForNewTriggers;
+        try
+        {
+            _calendarService.CheckDueReminders(now);
+        }
+        finally
+        {
+            _suppressChimeOnSync = prevSuppress;
+        }
+
+        var dueList = _calendarService.GetActiveDueReminders(now);
+        PendingReminderAlertCount = dueList.Count;
+        ActiveReminderAlert       = dueList.FirstOrDefault();
+        IsReminderAlertActive     = ActiveReminderAlert != null;
+
+        OnPropertyChanged(nameof(ActiveReminderTitle));
+        OnPropertyChanged(nameof(ActiveReminderDetailText));
+        OnPropertyChanged(nameof(ActiveReminderAccentBrush));
+        OnPropertyChanged(nameof(PendingAlertQueueBadge));
+        OnPropertyChanged(nameof(HasMultiplePendingAlerts));
+        OnPropertyChanged(nameof(SnoozeButtonLabel));
+
+        _stateMachine.SetPinnedReminderAlert(IsReminderAlertActive);
+    }
+
+    private void ScheduleNextReminderCheck()
+    {
+        _nextReminderTimer?.Stop();
+
+        DateTime now = DateTime.Now;
+        DateTime? nextTrigger = _calendarService.GetNextScheduledTrigger(now);
+        if (!nextTrigger.HasValue) return;
+
+        TimeSpan delay = nextTrigger.Value - now;
+        if (delay <= TimeSpan.Zero)
+        {
+            delay = TimeSpan.FromMilliseconds(200);
+        }
+        else
+        {
+            delay = delay.Add(TimeSpan.FromMilliseconds(250));
+            TimeSpan maxLeg = TimeSpan.FromHours(6);
+            if (delay > maxLeg) delay = maxLeg;
+        }
+
+        _nextReminderTimer ??= new DispatcherTimer();
+        _nextReminderTimer.Tick -= OnNextReminderTimerTick;
+        _nextReminderTimer.Tick += OnNextReminderTimerTick;
+        _nextReminderTimer.Interval = delay;
+        _nextReminderTimer.Start();
+    }
+
+    private void OnNextReminderTimerTick(object? sender, EventArgs e)
+    {
+        _nextReminderTimer?.Stop();
+        SyncActiveReminderAlerts(playChimeForNewTriggers: true);
+        UpdateUpcomingReminder();
+        ScheduleNextReminderCheck();
     }
 
     // ── Screen capture command ────────────────────────────────────────────────
@@ -1154,7 +1634,7 @@ public sealed partial class NotchViewModel : ObservableObject
     private void CaptureScreen()
     {
         _screenCaptureService.CaptureScreenToShelf();
-        SelectedTabIndex = 2; // Open Shelf tab (Dock & Clipboard)
+        SelectedTabIndex = TabShelf; // Open Shelf tab (Dock & Clipboard)
     }
 
     // ── Audio commands ────────────────────────────────────────────────────────
@@ -1303,6 +1783,19 @@ public sealed partial class NotchViewModel : ObservableObject
 
     public void RefreshSettingsBindings()
     {
+        bool use24h = _settingsService.Current.Use24HourClock;
+        _calendarService.ApplyClockFormat(use24h);
+        OnPropertyChanged(nameof(Use24HourClock));
+        OnPropertyChanged(nameof(SnoozeButtonLabel));
+        SyncPickerFromDateTime(CalendarService.TryParseTime(NewCalendarTime, out var tod)
+            ? DateTime.Today.Add(tod)
+            : DateTime.Now.AddMinutes(30));
+
+        UpdateDateTimeFields(DateTime.Now);
+        UpdateUpcomingReminder();
+        SyncActiveReminderAlerts(playChimeForNewTriggers: false);
+        RefreshHomeDashboard();
+
         NotifyIdlePresentationChanged();
         OnPropertyChanged(nameof(IsVerticalDock));
         OnPropertyChanged(nameof(IsHorizontalDock));
@@ -1389,6 +1882,7 @@ public sealed partial class NotchViewModel : ObservableObject
 
     partial void OnScratchpadTextChanged(string value)
     {
+        RefreshHomeWorkspaceSummaries();
         _scratchpadSaveTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
         _scratchpadSaveTimer.Stop();
         _scratchpadSaveTimer.Tick -= OnScratchpadSaveTick;
@@ -1565,7 +2059,7 @@ public sealed partial class NotchViewModel : ObservableObject
         if (next != null)
         {
             HasUpcomingReminder = true;
-            UpcomingReminderText = next.IsAllDay ? next.Title : $"{next.TimeText} • {next.Title}";
+            UpcomingReminderText = next.IsAllDay ? next.Title : $"{next.CompactTimeText} • {next.Title}";
         }
         else
         {
@@ -1584,14 +2078,84 @@ public sealed partial class NotchViewModel : ObservableObject
         _clockTimer.Start();
     }
 
+    private void UpdateDateTimeFields(DateTime now)
+    {
+        string fmt = _settingsService.Current.Use24HourClock ? "HH:mm" : "h:mm tt";
+        ClockText = now.ToString(fmt, CultureInfo.InvariantCulture);
+        DateText = now.ToString("ddd, MMM d");
+        HomeDayNumberText = now.ToString("dd");
+        HomeDayOfWeekText = now.ToString("dddd");
+        HomeMonthYearText = now.ToString("MMMM yyyy");
+    }
+
+    public void RefreshHomeDashboard()
+    {
+        var now = DateTime.Now;
+        UpdateDateTimeFields(now);
+
+        var (evCount, rmCount) = _calendarService.GetTodayCounts(now);
+        if (evCount == 0 && rmCount == 0)
+        {
+            HomeTodaySummaryText = "Clear schedule today";
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (evCount > 0) parts.Add(evCount == 1 ? "1 Event" : $"{evCount} Events");
+            if (rmCount > 0) parts.Add(rmCount == 1 ? "1 Reminder" : $"{rmCount} Reminders");
+            HomeTodaySummaryText = string.Join(" • ", parts);
+        }
+
+        HomeUpcomingItems.Clear();
+        foreach (var item in _calendarService.GetTodayUpcomingItems(now, 2))
+        {
+            HomeUpcomingItems.Add(item);
+        }
+        HasHomeUpcomingItems = HomeUpcomingItems.Count > 0;
+
+        RefreshHomeTimerSummary();
+        RefreshHomeWorkspaceSummaries();
+    }
+
+    private void RefreshHomeTimerSummary()
+    {
+        HomeTimerSummaryText = _timerService.IsAnyTimerRunning
+            ? _timerService.IslandTimerText
+            : $"{_timerService.FocusMinutes}m ready";
+    }
+
+    private void RefreshHomeWorkspaceSummaries()
+    {
+        int shelfCount = _shelfService.Items.Count;
+        HomeShelfSummaryText = shelfCount > 0
+            ? (shelfCount == 1 ? "1 file staged" : $"{shelfCount} files staged")
+            : "Shelf empty";
+
+        int clipCount = _clipboardService.History.Count;
+        HomeClipboardCountText = clipCount == 1 ? "1 clip" : $"{clipCount} clips";
+
+        string firstLine = (ScratchpadText ?? string.Empty)
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? string.Empty;
+        HomeScratchpadPreviewText = string.IsNullOrEmpty(firstLine) ? "Quick Notes" : firstLine;
+    }
+
     private void UpdateDateTime()
     {
         var now = DateTime.Now;
-        ClockText = now.ToString("HH:mm");
-        DateText = now.ToString("ddd, MMM d");
+        UpdateDateTimeFields(now);
         UpdateGreetingState(now, notifyRollover: true);
-        _calendarService.CheckDueReminders(now);
-        UpdateUpcomingReminder();
+
+        int minuteStamp = now.Hour * 60 + now.Minute;
+        if (minuteStamp != _lastStatusRefreshMinute)
+        {
+            _lastStatusRefreshMinute = minuteStamp;
+            _calendarService.RefreshDynamicStatuses(now);
+            SyncActiveReminderAlerts(playChimeForNewTriggers: true);
+            ScheduleNextReminderCheck();
+            UpdateUpcomingReminder();
+            RefreshHomeDashboard();
+        }
     }
 
     private void UpdateGreetingState(DateTime now, bool notifyRollover)

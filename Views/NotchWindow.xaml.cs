@@ -77,6 +77,7 @@ public partial class NotchWindow : Window
         _vm.VolumeToastActiveChanged     += OnVolumeToastActiveChanged;
         _vm.PowerToastActiveChanged      += OnPowerToastActiveChanged;
         _vm.BrightnessToastActiveChanged += OnBrightnessToastActiveChanged;
+        _vm.ReminderAlertActiveChanged   += OnReminderAlertActiveChanged;
 
         _vm.PrepareForScreenPickAsync = async () =>
         {
@@ -94,7 +95,8 @@ public partial class NotchWindow : Window
             if (e.PropertyName is nameof(_vm.IsMediaPlaying) or nameof(_vm.IsStopwatchRunning)
                 or nameof(_vm.HasStagedFiles) or nameof(_vm.HasBluetoothBattery)
                 or nameof(_vm.IsOnDesktop) or nameof(_vm.ShowFullLiveActivity)
-                or nameof(_vm.ShowDesktopAmbientPill))
+                or nameof(_vm.ShowDesktopAmbientPill) or nameof(_vm.IsReminderAlertActive)
+                or nameof(_vm.HasUpcomingReminder))
             {
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -131,7 +133,8 @@ public partial class NotchWindow : Window
             _vm.IsBrightnessToastActive,
             _vm.HasUpcomingReminder,
             _vm.ShowFullLiveActivity,
-            _vm.ShowDesktopAmbientPill);
+            _vm.ShowDesktopAmbientPill,
+            _vm.IsReminderAlertActive);
 
         var (tl, tt) = _monitor.ComputePosition(_settings.Current.DockEdge, tw, th, _settings.Current.TargetMonitorIndex);
 
@@ -207,6 +210,11 @@ public partial class NotchWindow : Window
     }
 
     private void OnMediaToastActiveChanged(bool isToastActive)
+    {
+        if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
+    }
+
+    private void OnReminderAlertActiveChanged(bool isReminderAlertActive)
     {
         if (_sm.State == NotchState.CollapsedHover) AnimateToCurrentState();
     }
@@ -653,13 +661,14 @@ public partial class NotchWindow : Window
         {
             int tabIdx = e.Key switch
             {
-                Key.D1 => 0,
-                Key.D2 => 1,
-                Key.D3 => 2,
-                Key.D4 => 3,
-                Key.D5 => 4,
-                Key.D6 => 5,
-                Key.D7 => 6,
+                Key.D1 => NotchViewModel.TabHome,
+                Key.D2 => NotchViewModel.TabMedia,
+                Key.D3 => NotchViewModel.TabTimers,
+                Key.D4 => NotchViewModel.TabShelf,
+                Key.D5 => NotchViewModel.TabCalendar,
+                Key.D6 => NotchViewModel.TabResources,
+                Key.D7 => NotchViewModel.TabTools,
+                Key.D8 => NotchViewModel.TabShare,
                 _      => -1
             };
             if (tabIdx >= 0)
@@ -726,6 +735,38 @@ public partial class NotchWindow : Window
             double fraction = Math.Clamp(slider.Value / 100.0, 0.0, 1.0);
             _vm.SeekMediaFractionCommand.Execute(fraction);
         }
+    }
+
+    private void OnCalendarTimeBoxGotFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox tb) tb.SelectAll();
+    }
+
+    private void OnCalendarTimeBoxMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TextBox tb && !tb.IsKeyboardFocusWithin)
+        {
+            tb.Focus();
+            tb.SelectAll();
+            e.Handled = true;
+        }
+    }
+
+    private void OnCalendarTimeBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        _vm.NormalizeTimeInputs();
+    }
+
+    private void OnCalendarHourMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        _vm.StepCalendarHourCommand.Execute(e.Delta > 0 ? 1 : -1);
+        e.Handled = true;
+    }
+
+    private void OnCalendarMinuteMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        _vm.StepCalendarMinuteCommand.Execute(e.Delta > 0 ? 1 : -1);
+        e.Handled = true;
     }
 
     // ── Mouse event bridge ───────────────────────────────────────────────────
@@ -814,8 +855,8 @@ public partial class NotchWindow : Window
         base.OnDragEnter(e);
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
 
-        // If already on the Share tab (Tab 6), allow direct drop onto the queue without overlay
-        if (_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != 6)
+        // If already on the Share tab, allow direct drop onto the queue without overlay
+        if (_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != NotchViewModel.TabShare)
         {
             _pendingDropFiles = null;
             _vm.HasPendingDropChoice = false;
@@ -839,7 +880,7 @@ public partial class NotchWindow : Window
         base.OnDragOver(e);
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
-            if ((_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != 6) && !_vm.IsFileDragOverlayVisible)
+            if ((_sm.State != NotchState.PeekExpanded || _vm.SelectedTabIndex != NotchViewModel.TabShare) && !_vm.IsFileDragOverlayVisible)
             {
                 _vm.HasPendingDropChoice = false;
                 _vm.IsFileDragOverlayVisible = true;
@@ -874,7 +915,7 @@ public partial class NotchWindow : Window
         if (!e.Data.GetDataPresent(DataFormats.FileDrop)) return;
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] files || files.Length == 0) return;
 
-        if (_sm.State == NotchState.PeekExpanded && _vm.SelectedTabIndex == 6)
+        if (_sm.State == NotchState.PeekExpanded && _vm.SelectedTabIndex == NotchViewModel.TabShare)
         {
             ClearDropOverlayState();
             _quickShareService.AddPaths(files);
@@ -932,7 +973,7 @@ public partial class NotchWindow : Window
         {
             ClearDropOverlayState();
             _shelfService.AddFiles(files);
-            _vm.SelectedTabIndex = 2;
+            _vm.SelectedTabIndex = NotchViewModel.TabShelf;
             e.Handled = true;
         }
     }
@@ -966,7 +1007,7 @@ public partial class NotchWindow : Window
         var files = _pendingDropFiles;
         ClearDropOverlayState();
         _shelfService.AddFiles(files);
-        _vm.SelectedTabIndex = 2;
+        _vm.SelectedTabIndex = NotchViewModel.TabShelf;
         e.Handled = true;
     }
 
@@ -1042,7 +1083,8 @@ public partial class NotchWindow : Window
             _vm.IsBrightnessToastActive,
             _vm.HasUpcomingReminder,
             _vm.ShowFullLiveActivity,
-            _vm.ShowDesktopAmbientPill);
+            _vm.ShowDesktopAmbientPill,
+            _vm.IsReminderAlertActive);
 
         var (l, t) = _monitor.ComputePosition(_settings.Current.DockEdge, w, h, _settings.Current.TargetMonitorIndex);
 

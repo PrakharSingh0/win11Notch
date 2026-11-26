@@ -15,6 +15,7 @@ public sealed class NotchStateMachine
     private bool             _isManualStealth;
     private bool             _isFullscreenStealth;
     private bool             _isContextHidden;
+    private bool             _isPinnedReminderAlertActive;
     private DispatcherTimer? _dwellTimer;
     private DispatcherTimer? _graceTimer;
 
@@ -29,7 +30,9 @@ public sealed class NotchStateMachine
     public bool ShouldBeStealth => _isManualStealth || _isFullscreenStealth || _isContextHidden;
     private NotchState RestingState => ShouldBeStealth
         ? NotchState.Stealth
-        : (_settings.Current.AlwaysShowHoverCapsule ? NotchState.CollapsedHover : NotchState.Idle);
+        : (_isPinnedReminderAlertActive || _settings.Current.AlwaysShowHoverCapsule
+            ? NotchState.CollapsedHover
+            : NotchState.Idle);
 
     public NotchStateMachine(SettingsService settings) => _settings = settings;
 
@@ -94,6 +97,20 @@ public sealed class NotchStateMachine
     /// <summary>Synchronizes the current non-Peek state when settings like AlwaysShowHoverCapsule change.</summary>
     public void SyncRestingState()
     {
+        if (_state == NotchState.PeekExpanded) return;
+        _dwellTimer?.Stop();
+        _graceTimer?.Stop();
+        Transition(RestingState);
+    }
+
+    /// <summary>
+    /// Pins the overlay in CollapsedHover while an un-dismissed due reminder is active,
+    /// returning to the normal resting state once dismissed/completed/snoozed.
+    /// </summary>
+    public void SetPinnedReminderAlert(bool active)
+    {
+        if (_isPinnedReminderAlertActive == active) return;
+        _isPinnedReminderAlertActive = active;
         if (_state == NotchState.PeekExpanded) return;
         _dwellTimer?.Stop();
         _graceTimer?.Stop();

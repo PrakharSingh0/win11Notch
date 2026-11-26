@@ -34,24 +34,130 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- Clean Translucent ScrollBar -->
+        <!-- Thin Minimal Sleek Pill ScrollBar (overrides WPF-UI wide DynamicScrollBar cleanly) -->
         <Style TargetType="ScrollBar">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Width" Value="5"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Vertical">
+                    <Setter Property="Width" Value="4"/>
+                    <Setter Property="Height" Value="Auto"/>
+                    <Setter Property="Margin" Value="2,2,0,2"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" IsTabStop="False"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="thumbBd" Width="4" CornerRadius="2" Background="#32FFFFFF"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="thumbBd" Property="Background" Value="#64FFFFFF"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsDragging" Value="True">
+                                                            <Setter TargetName="thumbBd" Property="Background" Value="#88FF5E36"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" IsTabStop="False"/>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="4"/>
+                    <Setter Property="Width" Value="Auto"/>
+                    <Setter Property="Margin" Value="2,2,2,0"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand" Opacity="0" IsTabStop="False"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="thumbBd" Height="4" CornerRadius="2" Background="#32FFFFFF"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="thumbBd" Property="Background" Value="#64FFFFFF"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsDragging" Value="True">
+                                                            <Setter TargetName="thumbBd" Property="Background" Value="#88FF5E36"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand" Opacity="0" IsTabStop="False"/>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Clean Simple ScrollViewer (bypasses bulky WPF-UI DynamicScrollBar) -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="ScrollBar">
-                        <Track x:Name="PART_Track" IsDirectionReversed="True">
-                            <Track.Thumb>
-                                <Thumb>
-                                    <Thumb.Template>
-                                        <ControlTemplate TargetType="Thumb">
-                                            <Border CornerRadius="2.5" Background="#35FFFFFF"/>
-                                        </ControlTemplate>
-                                    </Thumb.Template>
-                                </Thumb>
-                            </Track.Thumb>
-                        </Track>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <ScrollContentPresenter Grid.Row="0" Grid.Column="0"
+                                                    Margin="{TemplateBinding Padding}"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"/>
+
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Row="0" Grid.Column="1"
+                                       Orientation="Vertical"
+                                       Minimum="0"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                       AutomationProperties.AutomationId="VerticalScrollBar"/>
+
+                            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                       Grid.Row="1" Grid.Column="0"
+                                       Orientation="Horizontal"
+                                       Minimum="0"
+                                       Maximum="{TemplateBinding ScrollableWidth}"
+                                       ViewportSize="{TemplateBinding ViewportWidth}"
+                                       Value="{Binding HorizontalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"
+                                       AutomationProperties.AutomationId="HorizontalScrollBar"/>
+                        </Grid>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -290,7 +396,7 @@
         <Style x:Key="FluentSegmentedTabItem" TargetType="TabItem">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#8E9098"/>
-            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Margin" Value="1,0"/>
@@ -300,7 +406,7 @@
                     <ControlTemplate TargetType="TabItem">
                         <Border x:Name="tabBd" Background="{TemplateBinding Background}"
                                 BorderBrush="Transparent" BorderThickness="1"
-                                CornerRadius="9" Padding="8.5,5">
+                                CornerRadius="9" Padding="7,4.5">
                             <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -312,6 +418,34 @@
                                 <Setter TargetName="tabBd" Property="Background" Value="#26FFFFFF"/>
                                 <Setter TargetName="tabBd" Property="BorderBrush" Value="#2CFFFFFF"/>
                                 <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Clickable Home Bento Surface Button (renders subtle hover lift without nesting buttons) -->
+        <Style x:Key="HomeCardSurfaceBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="cardHover" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="13"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="cardHover" Property="Background" Value="#12FFFFFF"/>
+                                <Setter TargetName="cardHover" Property="BorderBrush" Value="#3EFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="cardHover" Property="Background" Value="#1CFFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -638,7 +772,15 @@
                         IsHitTestVisible="False"
                         Visibility="Collapsed"/>
 
-                <Grid VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10,0">
+                <!-- Persistent Active Reminder Coral Accent Rim -->
+                <Border CornerRadius="21"
+                        BorderBrush="{Binding ActiveReminderAccentBrush}"
+                        BorderThickness="1.4"
+                        Opacity="0.72"
+                        IsHitTestVisible="False"
+                        Visibility="{Binding IsReminderAlertActive, Converter={StaticResource BoolToVis}}"/>
+
+                <Grid VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="10,0">
 
                     <!-- 1. Unified Dynamic Island Activity Capsule -->
                     <StackPanel Orientation="Horizontal"
@@ -655,6 +797,9 @@
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsBrightnessToastActive}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsReminderAlertActive}" Value="True">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -913,6 +1058,105 @@
                                      Width="126" VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- 5. Persistent Due Reminder Pill (stays visible until Done, Snooze, or Dismiss) -->
+                    <DockPanel VerticalAlignment="Center" LastChildFill="True">
+                        <DockPanel.Style>
+                            <Style TargetType="DockPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsReminderAlertActive}" Value="True"/>
+                                            <Condition Binding="{Binding IsVolumeToastActive}" Value="False"/>
+                                            <Condition Binding="{Binding IsPowerToastActive}" Value="False"/>
+                                            <Condition Binding="{Binding IsBrightnessToastActive}" Value="False"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DockPanel.Style>
+
+                        <!-- Right: Interactive non-focus-stealing Done / Snooze / Dismiss controls -->
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                            <Button Command="{Binding CompleteActiveReminderCommand}"
+                                    ToolTip="Mark Reminder Done"
+                                    Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="doneBd" Background="#2869F0AE" BorderBrush="#7269F0AE" BorderThickness="1" CornerRadius="10" Padding="8,3.5">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE73E;" Foreground="#69F0AE" FontSize="9.5" Margin="0,0,3.5,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Done" Foreground="#E8FFF2" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="doneBd" Property="Background" Value="#4469F0AE"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+
+                            <Button Command="{Binding SnoozeActiveReminderCommand}"
+                                    ToolTip="Snooze reminder"
+                                    Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="snzBd" Background="#20FFD54F" BorderBrush="#52FFD54F" BorderThickness="1" CornerRadius="10" Padding="7,3.5">
+                                            <TextBlock Text="{Binding SnoozeButtonLabel}" Foreground="#FFE89E" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="snzBd" Property="Background" Value="#38FFD54F"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+
+                            <Button Command="{Binding DismissActiveReminderCommand}"
+                                    ToolTip="Dismiss alert (keeps item in Calendar)"
+                                    Width="22" Height="22" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="disBd" Background="#1AFFFFFF" BorderBrush="#2EFFFFFF" BorderThickness="1" CornerRadius="11">
+                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" Foreground="#C8CDD6" FontSize="8.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="disBd" Property="Background" Value="#34FF5E36"/>
+                                                <Setter TargetName="disBd" Property="BorderBrush" Value="#70FF5E36"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Left: Glowing Bell Icon + Queue Count Badge -->
+                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Border Width="24" Height="24" CornerRadius="12" Background="#24FF5E36" BorderBrush="{Binding ActiveReminderAccentBrush}" BorderThickness="1.2">
+                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" Foreground="{Binding ActiveReminderAccentBrush}" FontSize="11.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border Background="#2CFF5E36" BorderBrush="#65FF5E36" BorderThickness="1" CornerRadius="7" Padding="5,1" Margin="4,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding HasMultiplePendingAlerts, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding PendingAlertQueueBadge}" Foreground="#FFE2D8" FontSize="9" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Center: Title + Formatted Time / Overdue Status -->
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ActiveReminderTitle}"
+                                       Foreground="White" FontSize="11.5" FontWeight="Bold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding ActiveReminderDetailText}"
+                                       Foreground="#FFD54F" FontSize="9.5" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DockPanel>
+
                 </Grid>
             </Grid>
         </Border>
@@ -947,6 +1191,453 @@
                     <TabControl Grid.Row="0"
                                 Style="{StaticResource BentoTabControl}"
                                 SelectedIndex="{Binding SelectedTabIndex}">
+
+                        <!-- TAB 0: BENTO HOME DASHBOARD -->
+                        <TabItem Style="{StaticResource FluentSegmentedTabItem}">
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE80F;" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Home" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TabItem.Header>
+
+                            <Grid Margin="2,2,2,2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="1.05*"/>
+                                    <RowDefinition Height="8"/>
+                                    <RowDefinition Height="0.95*"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.04*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="1.12*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- CARD 1 (Top-Left): Date, Day, Month, Year + Clock + Today Schedule Count -> Calendar (4) -->
+                                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource BentoCard}">
+                                    <Grid>
+                                        <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                Command="{Binding NavigateToTabCommand}" CommandParameter="4"
+                                                ToolTip="Open Calendar &amp; Reminders"/>
+                                        <Grid Margin="11,9" IsHitTestVisible="False">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Ellipse Width="6" Height="6" Fill="{Binding GreetingAccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding GreetingTitle}" Foreground="#B8BCC4" FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding HomeDayNumberText}" Foreground="White" FontSize="32" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding HomeDayOfWeekText}" Foreground="#FF5E36" FontSize="11" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding HomeMonthYearText}" Foreground="#E8EAEE" FontSize="11" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding ClockText}" Foreground="#989EA8" FontSize="10.5" FontWeight="SemiBold" Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <DockPanel Grid.Row="2" LastChildFill="False">
+                                                <TextBlock Text="{Binding HomeTodaySummaryText}" Foreground="#9EA4AE" FontSize="9.5" FontWeight="SemiBold" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                                <Border Background="#2AFF5E36" BorderBrush="#65FF5E36" BorderThickness="1" CornerRadius="5" Padding="4.5,1" DockPanel.Dock="Right"
+                                                        Visibility="{Binding Calendar.HasOverdueToday, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="Due" Foreground="#FF8A65" FontSize="8.5" FontWeight="Bold"/>
+                                                </Border>
+                                            </DockPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- CARD 2 (Top-Center): Now Playing Music Player + Inline Controls -> Media (1) -->
+                                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource BentoCard}">
+                                    <Grid>
+                                        <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                Command="{Binding NavigateToTabCommand}" CommandParameter="1"
+                                                ToolTip="Open Media Hub"/>
+                                        <Grid Margin="11,9">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0" IsHitTestVisible="False">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEC4F;" Foreground="#FF5E36" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding ActiveMediaSourceName}" Foreground="#A8ACB4" FontSize="10" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <DockPanel Grid.Row="1" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                <Border Width="42" Height="42" CornerRadius="10" Background="#20FFFFFF" BorderBrush="#32FFFFFF" BorderThickness="1" ClipToBounds="True" DockPanel.Dock="Left" Margin="0,0,9,0">
+                                                    <Grid>
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEC4F;" FontSize="16" Foreground="#38FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Image Source="{Binding MediaThumbnail}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    </Grid>
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding MediaTitle}" Foreground="White" FontSize="12" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
+                                                    <TextBlock Text="{Binding MediaArtist}" Foreground="#989BA4" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="150" Margin="0,1.5,0,0"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <DockPanel Grid.Row="2" LastChildFill="True">
+                                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                                    <Button Command="{Binding PreviousTrackCommand}" Width="24" Height="24" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Previous Track" Margin="0,0,5,0">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="bd" CornerRadius="12" Background="#1CFFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE892;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#32FFFFFF"/></Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+
+                                                    <Button Command="{Binding PlayPauseCommand}" Width="26" Height="26" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Play / Pause" Margin="0,0,5,0">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="bd" CornerRadius="13" Background="#FF5E36">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="10" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Text" Value="&#xE768;"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsMediaPlaying}" Value="True">
+                                                                                        <Setter Property="Text" Value="&#xE769;"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#FF7350"/></Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+
+                                                    <Button Command="{Binding NextTrackCommand}" Width="24" Height="24" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Next Track">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="bd" CornerRadius="12" Background="#1CFFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE893;" FontSize="9" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="#32FFFFFF"/></Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </StackPanel>
+
+                                                <ProgressBar Style="{StaticResource MetricProgressBarStyle}"
+                                                             Height="4" Foreground="#FF5E36"
+                                                             Value="{Binding MediaProgressPercent, Mode=OneWay}" Maximum="100"
+                                                             Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                            </DockPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- CARD 3 (Top-Right): Upcoming Events & Reminders Today -> Calendar (4) -->
+                                <Border Grid.Row="0" Grid.Column="4" Style="{StaticResource BentoCard}">
+                                    <Grid>
+                                        <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                Command="{Binding NavigateToTabCommand}" CommandParameter="4"
+                                                ToolTip="Open Calendar &amp; Reminders"/>
+                                        <Grid Margin="11,9" IsHitTestVisible="False">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" Foreground="#00E5FF" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Up Next" Foreground="#E8EAEE" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasHomeUpcomingItems}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <TextBlock Text="All clear today" Foreground="#B8BCC4" FontSize="11.5" FontWeight="SemiBold"/>
+                                                <TextBlock Text="Tap to add event or reminder" Foreground="#60FFFFFF" FontSize="9.5" Margin="0,2,0,0"/>
+                                            </StackPanel>
+
+                                            <ItemsControl Grid.Row="1" ItemsSource="{Binding HomeUpcomingItems}" VerticalAlignment="Center"
+                                                          Visibility="{Binding HasHomeUpcomingItems, Converter={StaticResource BoolToVis}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#12FFFFFF" BorderBrush="#1CFFFFFF" BorderThickness="1" CornerRadius="7" Padding="6,4.5" Margin="0,2">
+                                                            <DockPanel LastChildFill="True">
+                                                                <Border Width="6" Height="6" CornerRadius="3" BorderBrush="{Binding AccentHex}" BorderThickness="1.3" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                        Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"/>
+                                                                <Border Width="2.5" Height="16" CornerRadius="1.25" Background="{Binding AccentHex}" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                                        Visibility="{Binding IsEvent, Converter={StaticResource BoolToVis}}"/>
+                                                                <TextBlock Text="{Binding RelativeStatusText}" Foreground="{Binding StatusBadgeBrushHex}" FontSize="8.5" FontWeight="Bold"
+                                                                           DockPanel.Dock="Right" VerticalAlignment="Center" Margin="4,0,0,0"
+                                                                           Visibility="{Binding HasRelativeStatus, Converter={StaticResource BoolToVis}}"/>
+                                                                <StackPanel VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding Title}" Foreground="White" FontSize="10.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                                    <TextBlock Text="{Binding CompactTimeText}" Foreground="#8E9098" FontSize="9"/>
+                                                                </StackPanel>
+                                                            </DockPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- CARD 4 (Bottom-Left): System Battery & Bluetooth Device Battery + Volume -> Resources (5) -->
+                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource BentoCard}">
+                                    <Grid>
+                                        <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                Command="{Binding NavigateToTabCommand}" CommandParameter="5"
+                                                ToolTip="Open Power &amp; Resources"/>
+                                        <Grid Margin="11,9" IsHitTestVisible="False">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEBA0;" Foreground="#69F0AE" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Power &amp; Audio" Foreground="#E8EAEE" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <!-- System Battery -->
+                                            <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE945;" Foreground="#FFD54F" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center"
+                                                                   Visibility="{Binding IsCharging, Converter={StaticResource BoolToVis}}"/>
+                                                        <TextBlock Text="{Binding BatteryPercent, StringFormat='{}{0}%'}" Foreground="#69F0AE" FontSize="12.5" FontWeight="Bold"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="System Battery" Foreground="#B8BCC4" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                </DockPanel>
+                                                <ProgressBar Style="{StaticResource MetricProgressBarStyle}" Height="5" Foreground="#69F0AE"
+                                                             Value="{Binding BatteryPercent, Mode=OneWay}" Maximum="100"/>
+                                            </StackPanel>
+
+                                            <!-- Bluetooth Device Battery + Volume -->
+                                            <Border Grid.Row="2" Background="#12FFFFFF" CornerRadius="7" Padding="7,4">
+                                                <DockPanel LastChildFill="True">
+                                                    <TextBlock Text="{Binding BluetoothBatteryText}" Foreground="#69F0AE" FontSize="10" FontWeight="Bold"
+                                                               DockPanel.Dock="Right" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                               Visibility="{Binding HasBluetoothBattery, Converter={StaticResource BoolToVis}}"/>
+                                                    <TextBlock Text="{Binding MasterVolume, StringFormat='Vol {0:F0}%'}" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold"
+                                                               DockPanel.Dock="Right" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasBluetoothBattery}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE7F6;" Foreground="#00E5FF" FontSize="9.5" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding ActiveAudioDeviceName}" Foreground="#E0FFFFFF" FontSize="9.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="112"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- CARD 5 (Bottom-Center): Device Resources (CPU / GPU / RAM / Network) -> Resources (5) -->
+                                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource BentoCard}">
+                                    <Grid>
+                                        <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                Command="{Binding NavigateToTabCommand}" CommandParameter="5"
+                                                ToolTip="Open Full System Resources"/>
+                                        <Grid Margin="11,9" IsHitTestVisible="False">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE9D9;" Foreground="#FF5E36" FontSize="10" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Device Resources" Foreground="#E8EAEE" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <Grid Grid.Row="1" VerticalAlignment="Center">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="7"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="10"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- CPU -->
+                                                <StackPanel Grid.Row="0" Grid.Column="0">
+                                                    <DockPanel Margin="0,0,0,2.5">
+                                                        <TextBlock Text="{Binding CpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="10.5" FontWeight="Bold" DockPanel.Dock="Right"/>
+                                                        <TextBlock Text="CPU" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold"/>
+                                                    </DockPanel>
+                                                    <ProgressBar Style="{StaticResource MetricProgressBarStyle}" Height="4.5" Foreground="#FF5E36" Value="{Binding CpuPercent, Mode=OneWay}" Maximum="100"/>
+                                                </StackPanel>
+
+                                                <!-- GPU -->
+                                                <StackPanel Grid.Row="0" Grid.Column="2">
+                                                    <DockPanel Margin="0,0,0,2.5">
+                                                        <TextBlock Text="{Binding GpuPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="10.5" FontWeight="Bold" DockPanel.Dock="Right"/>
+                                                        <TextBlock Text="GPU" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold"/>
+                                                    </DockPanel>
+                                                    <ProgressBar Style="{StaticResource MetricProgressBarStyle}" Height="4.5" Foreground="#00E5FF" Value="{Binding GpuPercent, Mode=OneWay}" Maximum="100"/>
+                                                </StackPanel>
+
+                                                <!-- RAM -->
+                                                <StackPanel Grid.Row="2" Grid.Column="0">
+                                                    <DockPanel Margin="0,0,0,2.5">
+                                                        <TextBlock Text="{Binding MemoryPercent, StringFormat='{}{0}%'}" Foreground="White" FontSize="10.5" FontWeight="Bold" DockPanel.Dock="Right"/>
+                                                        <TextBlock Text="RAM" Foreground="#8E9098" FontSize="9.5" FontWeight="SemiBold"/>
+                                                    </DockPanel>
+                                                    <ProgressBar Style="{StaticResource MetricProgressBarStyle}" Height="4.5" Foreground="#B388FF" Value="{Binding MemoryPercent, Mode=OneWay}" Maximum="100"/>
+                                                </StackPanel>
+
+                                                <!-- Network -->
+                                                <Border Grid.Row="2" Grid.Column="2" Background="#12FFFFFF" CornerRadius="6" Padding="6,2.5" VerticalAlignment="Center">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding DownloadSpeedText, StringFormat='↓ {0}'}" Foreground="#69F0AE" FontSize="9" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding UploadSpeedText, StringFormat='↑ {0}'}" Foreground="#989EA8" FontSize="8.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- CARD CLUSTER 6 (Bottom-Right): Timers/Water + Shelf + Tools/Share -->
+                                <Grid Grid.Row="2" Grid.Column="4">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="7"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Top Tile: Focus Timer & Hydration -> Timers (2) -->
+                                    <Border Grid.Row="0" Style="{StaticResource BentoCard}">
+                                        <Grid>
+                                            <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                    Command="{Binding NavigateToTabCommand}" CommandParameter="2"
+                                                    ToolTip="Open Timers &amp; Hydration"/>
+                                            <DockPanel Margin="10,6" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE76C;" Foreground="#48FFFFFF" FontSize="8.5" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE916;" Foreground="#FF5E36" FontSize="9.5" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding HomeTimerSummaryText}" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEC42;" Foreground="#40C4FF" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding Timer.WaterText, StringFormat='Water {0}'}" Foreground="#98D8F8" FontSize="9.5" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Bottom Split: Shelf (3) | Tools (6) & Share (7) -->
+                                    <Grid Grid.Row="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="7"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Shelf & Clipboard -> Shelf (3) -->
+                                        <Border Grid.Column="0" Style="{StaticResource BentoCard}">
+                                            <Grid>
+                                                <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                        Command="{Binding NavigateToTabCommand}" CommandParameter="3"
+                                                        ToolTip="Open File Shelf &amp; Clipboard"/>
+                                                <StackPanel Margin="8,6" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE8B7;" Foreground="#40C4FF" FontSize="9.5" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Shelf" Foreground="White" FontSize="10.5" FontWeight="Bold"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding HomeShelfSummaryText}" Foreground="#B8BCC4" FontSize="8.5" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding HomeClipboardCountText}" Foreground="#7E848E" FontSize="8.5"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Tools & Quick Share -> Tools (6) / Share (7) -->
+                                        <Border Grid.Column="2" Style="{StaticResource BentoCard}">
+                                            <Grid>
+                                                <Button Style="{StaticResource HomeCardSurfaceBtn}"
+                                                        Command="{Binding NavigateToTabCommand}" CommandParameter="6"
+                                                        ToolTip="Open Tools, Brightness &amp; Notes"/>
+                                                <Grid Margin="8,6">
+                                                    <StackPanel VerticalAlignment="Center" IsHitTestVisible="False">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE706;" Foreground="#FFD54F" FontSize="9.5" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding DisplayBrightness, StringFormat='{}{0}%'}" Foreground="White" FontSize="10.5" FontWeight="Bold"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding HomeScratchpadPreviewText}" Foreground="#989EA8" FontSize="8.5" TextTrimming="CharacterEllipsis" MaxWidth="66" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                    <Button Command="{Binding NavigateToTabCommand}" CommandParameter="7"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                            Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Open Quick Share">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="shBd" Background="#22FF5E36" BorderBrush="#55FF5E36" BorderThickness="1" CornerRadius="5" Padding="3.5,2">
+                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE72D;" FontSize="8" Foreground="#FF8A65"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="shBd" Property="Background" Value="#3EFF5E36"/></Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </TabItem>
 
                         <!-- TAB 1: MEDIA HUB -->
                         <TabItem Style="{StaticResource FluentSegmentedTabItem}">
@@ -2021,29 +2712,32 @@
                             </Grid>
                         </TabItem>
 
-                        <!-- TAB 4: SAMSUNG-STYLE CALENDAR & REMINDERS -->
+                        <!-- TAB 4: REWORKED CALENDAR, EVENTS & PERSISTENT REMINDERS -->
                         <TabItem Style="{StaticResource FluentSegmentedTabItem}">
                             <TabItem.Header>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Calendar" VerticalAlignment="Center"/>
+                                    <Ellipse Width="5.5" Height="5.5" Fill="#FF5E36" Margin="5,0,0,0" VerticalAlignment="Center"
+                                             Visibility="{Binding Calendar.HasOverdueToday, Converter={StaticResource BoolToVis}}"/>
                                 </StackPanel>
                             </TabItem.Header>
 
                             <Grid Margin="2,2,2,2">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="328"/>
+                                    <ColumnDefinition Width="314"/>
                                     <ColumnDefinition Width="10"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Left Card: Whole-Month Calendar Grid -->
+                                <!-- Left Card: Whole-Month Calendar Grid + Split Event/Reminder Indicators -->
                                 <Border Grid.Column="0" Style="{StaticResource BentoCard}" Padding="10,9">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
                                         <!-- Month Header & Navigation -->
@@ -2074,7 +2768,7 @@
                                             <TextBlock Text="SAT" Foreground="#8E9098" FontSize="9.5" FontWeight="Bold" HorizontalAlignment="Center"/>
                                         </UniformGrid>
 
-                                        <!-- 6x7 Month Days Grid -->
+                                        <!-- 6x7 Month Days Grid with Split Event (Solid) vs Reminder (Ring) Dots -->
                                         <ItemsControl Grid.Row="2" ItemsSource="{Binding Calendar.MonthDays}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
@@ -2099,18 +2793,30 @@
                                                                             <TextBlock x:Name="dayTxt" Text="{Binding DayNumber}" FontSize="11.5" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                         </Border>
 
-                                                                        <ItemsControl Grid.Row="1" ItemsSource="{Binding DotColors}" HorizontalAlignment="Center" VerticalAlignment="Top">
-                                                                            <ItemsControl.ItemsPanel>
-                                                                                <ItemsPanelTemplate>
-                                                                                    <StackPanel Orientation="Horizontal"/>
-                                                                                </ItemsPanelTemplate>
-                                                                            </ItemsControl.ItemsPanel>
-                                                                            <ItemsControl.ItemTemplate>
-                                                                                <DataTemplate>
-                                                                                    <Ellipse Width="4" Height="4" Fill="{Binding}" Margin="1,0"/>
-                                                                                </DataTemplate>
-                                                                            </ItemsControl.ItemTemplate>
-                                                                        </ItemsControl>
+                                                                        <!-- Split Indicator Row: Solid Dots (Events) + Hollow Rings (Reminders) -->
+                                                                        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top">
+                                                                            <ItemsControl ItemsSource="{Binding EventDotColors}">
+                                                                                <ItemsControl.ItemsPanel>
+                                                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                                                </ItemsControl.ItemsPanel>
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <Ellipse Width="4" Height="4" Fill="{Binding}" Margin="1,0"/>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+
+                                                                            <ItemsControl ItemsSource="{Binding ReminderDotColors}">
+                                                                                <ItemsControl.ItemsPanel>
+                                                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                                                </ItemsControl.ItemsPanel>
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <Border Width="4.5" Height="4.5" CornerRadius="2.25" Background="Transparent" BorderBrush="{Binding}" BorderThickness="1.15" Margin="1,0"/>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                        </StackPanel>
                                                                     </Grid>
                                                                 </Border>
                                                                 <ControlTemplate.Triggers>
@@ -2119,6 +2825,9 @@
                                                                     </Trigger>
                                                                     <DataTrigger Binding="{Binding IsCurrentMonth}" Value="False">
                                                                         <Setter TargetName="dayTxt" Property="Foreground" Value="#48FFFFFF"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding HasOverdueReminder}" Value="True">
+                                                                        <Setter TargetName="cellBd" Property="BorderBrush" Value="#55FF5E36"/>
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                                         <Setter TargetName="cellBd" Property="Background" Value="#20FF5E36"/>
@@ -2136,10 +2845,35 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+
+                                        <!-- Compact Bottom Legend & Clock Format Pill -->
+                                        <DockPanel Grid.Row="3" Margin="2,5,2,0" LastChildFill="False">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                                <Ellipse Width="5" Height="5" Fill="#00E5FF" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Event" Foreground="#8E9098" FontSize="9.5" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                <Border Width="5.5" Height="5.5" CornerRadius="2.75" BorderBrush="#FF5E36" BorderThickness="1.2" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Reminder" Foreground="#8E9098" FontSize="9.5" VerticalAlignment="Center"/>
+                                            </StackPanel>
+
+                                            <Border Background="#12FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="6" Padding="5,1.5" DockPanel.Dock="Right">
+                                                <TextBlock FontSize="9" FontWeight="SemiBold" Foreground="#B0B4BC">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="12H AM/PM"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Use24HourClock}" Value="True">
+                                                                    <Setter Property="Text" Value="24H CLOCK"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+                                        </DockPanel>
                                     </Grid>
                                 </Border>
 
-                                <!-- Right Card: Selected Day Schedule & Samsung-Style Reminder Composer -->
+                                <!-- Right Card: Selected Day Agenda, Filters, Overdue Rescue & 12-Hour Composer -->
                                 <Border Grid.Column="2" Style="{StaticResource BentoCard}" Padding="11,9">
                                     <Grid>
                                         <Grid.RowDefinitions>
@@ -2148,11 +2882,11 @@
                                         </Grid.RowDefinitions>
 
                                         <!-- Header -->
-                                        <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                                            <Button Command="{Binding ToggleAddCalendarEventCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                        <DockPanel Grid.Row="0" Margin="0,0,0,7">
+                                            <Button Command="{Binding ToggleAddCalendarEventCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}" VerticalAlignment="Top">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
-                                                        <Border x:Name="newBd" CornerRadius="8" Padding="9,3.5" Background="#FF5E36">
+                                                        <Border x:Name="newBd" CornerRadius="8" Padding="9,4" Background="#FF5E36">
                                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                                 <TextBlock x:Name="newIco" FontFamily="Segoe Fluent Icons" Text="&#xE710;" FontSize="9.5" Foreground="White" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                                                 <TextBlock x:Name="newTxt" Text="New" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
@@ -2169,56 +2903,38 @@
                                                 </Button.Template>
                                             </Button>
 
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding Calendar.SelectedDateHeader}" Foreground="White" FontSize="13.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="12" Foreground="#FF5E36" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding Calendar.SelectedDateHeader}" Foreground="White" FontSize="13.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Calendar.AgendaSummaryText}" Foreground="#8E9098" FontSize="10" Margin="18,1,0,0"/>
                                             </StackPanel>
                                         </DockPanel>
 
-                                        <!-- Dedicated Event & Reminder Composer View (cleanly replaces list area while editing to eliminate any overlap) -->
+                                        <!-- Dedicated Differentiated Event & Reminder Composer View -->
                                         <ScrollViewer Grid.Row="1"
                                                       Visibility="{Binding IsAddingCalendarEvent, Converter={StaticResource BoolToVis}}"
                                                       VerticalScrollBarVisibility="Auto"
                                                       HorizontalScrollBarVisibility="Disabled">
-                                            <Border Background="#14FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="10" Padding="10">
+                                            <Border Background="#14FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="10" Padding="9,8">
                                                 <StackPanel>
-                                                    <!-- Title Input -->
-                                                    <Border Background="#18000000" BorderBrush="#2CFFFFFF" BorderThickness="1" CornerRadius="8" Padding="8,5" Margin="0,0,0,9">
-                                                        <Grid>
-                                                            <TextBlock Text="Event or reminder title..." Foreground="#58FFFFFF" FontSize="11.5" VerticalAlignment="Center" IsHitTestVisible="False">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding NewCalendarTitle}" Value="">
-                                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                            <TextBox Text="{Binding NewCalendarTitle, UpdateSourceTrigger=PropertyChanged}"
-                                                                     Background="Transparent" Foreground="White" CaretBrush="#FF5E36" BorderThickness="0" FontSize="12"/>
-                                                        </Grid>
-                                                    </Border>
-
-                                                    <!-- Kind Segmented Toggle (Reminder vs Event) -->
-                                                    <DockPanel Margin="0,0,0,9" LastChildFill="False">
-                                                        <TextBlock Text="Type" Foreground="#8E9098" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="2,0,10,0"/>
-                                                        <Border Background="#12FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="8" Padding="2" DockPanel.Dock="Right">
+                                                    <!-- Type Segmented Toggle + Mode Caption -->
+                                                    <DockPanel Margin="0,0,0,6" LastChildFill="False">
+                                                        <Border Background="#12FFFFFF" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="8" Padding="2" DockPanel.Dock="Left">
                                                             <StackPanel Orientation="Horizontal">
                                                                 <Button Command="{Binding SetCalendarTypeCommand}" CommandParameter="True" Cursor="Hand" FocusVisualStyle="{x:Null}">
                                                                     <Button.Template>
                                                                         <ControlTemplate TargetType="Button">
-                                                                            <Border x:Name="pill" CornerRadius="6" Padding="10,4" Background="Transparent">
+                                                                            <Border x:Name="pill" CornerRadius="6" Padding="9,3.5" Background="Transparent">
                                                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" FontSize="10" Foreground="#FF5E36" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                                                    <TextBlock Text="Reminder" Foreground="#E0FFFFFF" FontSize="11" FontWeight="SemiBold"/>
+                                                                                    <TextBlock Text="Reminder" Foreground="#E0FFFFFF" FontSize="10.5" FontWeight="SemiBold"/>
                                                                                 </StackPanel>
                                                                             </Border>
                                                                             <ControlTemplate.Triggers>
                                                                                 <DataTrigger Binding="{Binding DataContext.NewCalendarIsReminder, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                                    <Setter TargetName="pill" Property="Background" Value="#2CFF5E36"/>
+                                                                                    <Setter TargetName="pill" Property="Background" Value="#34FF5E36"/>
                                                                                 </DataTrigger>
                                                                             </ControlTemplate.Triggers>
                                                                         </ControlTemplate>
@@ -2227,10 +2943,10 @@
                                                                 <Button Command="{Binding SetCalendarTypeCommand}" CommandParameter="False" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="2,0,0,0">
                                                                     <Button.Template>
                                                                         <ControlTemplate TargetType="Button">
-                                                                            <Border x:Name="pill" CornerRadius="6" Padding="10,4" Background="Transparent">
+                                                                            <Border x:Name="pill" CornerRadius="6" Padding="9,3.5" Background="Transparent">
                                                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                                                     <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="10" Foreground="#00E5FF" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                                                    <TextBlock Text="Event" Foreground="#E0FFFFFF" FontSize="11" FontWeight="SemiBold"/>
+                                                                                    <TextBlock Text="Event" Foreground="#E0FFFFFF" FontSize="10.5" FontWeight="SemiBold"/>
                                                                                 </StackPanel>
                                                                             </Border>
                                                                             <ControlTemplate.Triggers>
@@ -2243,50 +2959,371 @@
                                                                 </Button>
                                                             </StackPanel>
                                                         </Border>
+
+                                                        <Button Command="{Binding ToggleCalendarAllDayCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}" VerticalAlignment="Center">
+                                                            <Button.Template>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Border x:Name="allBd" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="8,3.5">
+                                                                        <TextBlock x:Name="allTxt" Text="All Day" Foreground="#B0B4BC" FontSize="10" FontWeight="SemiBold"/>
+                                                                    </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <DataTrigger Binding="{Binding DataContext.NewCalendarIsAllDay, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                            <Setter TargetName="allBd" Property="Background" Value="#2CFF5E36"/>
+                                                                            <Setter TargetName="allBd" Property="BorderBrush" Value="#80FF5E36"/>
+                                                                            <Setter TargetName="allTxt" Property="Foreground" Value="White"/>
+                                                                        </DataTrigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Button.Template>
+                                                        </Button>
                                                     </DockPanel>
 
-                                                    <!-- Time & All-Day Controls -->
-                                                    <DockPanel Margin="0,0,0,10" LastChildFill="False">
-                                                        <TextBlock Text="Schedule" Foreground="#8E9098" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="2,0,10,0"/>
+                                                    <TextBlock Text="{Binding ComposerModeHintText}" Foreground="#7E848E" FontSize="9.5" Margin="2,0,0,6"/>
 
-                                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                                                            <Border Background="#18000000" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="7,3" Margin="0,0,6,0" VerticalAlignment="Center">
+                                                    <!-- Title Input -->
+                                                    <Border Background="#18000000" BorderBrush="#2CFFFFFF" BorderThickness="1" CornerRadius="8" Padding="8,4.5" Margin="0,0,0,7">
+                                                        <Grid>
+                                                            <TextBlock Foreground="#58FFFFFF" FontSize="11" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Setter Property="Text" Value="Remind me to... (e.g. Call Alex, Take meds)"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding NewCalendarTitle}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding NewCalendarIsEvent}" Value="True">
+                                                                                <Setter Property="Text" Value="Event title... (e.g. Team Standup, Focus Block)"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBox Text="{Binding NewCalendarTitle, UpdateSourceTrigger=PropertyChanged}"
+                                                                     Background="Transparent" Foreground="White" CaretBrush="#FF5E36" BorderThickness="0" FontSize="11.5"/>
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <!-- 12-Hour AM/PM Stepper Time Picker + Quick Presets -->
+                                                    <StackPanel Margin="0,0,0,7">
+                                                        <StackPanel.Style>
+                                                            <Style TargetType="StackPanel">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding NewCalendarIsAllDay}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </StackPanel.Style>
+
+                                                        <DockPanel Margin="0,0,0,5" LastChildFill="False">
+                                                            <!-- Editable + Stepper Hour & Minute Time Input -->
+                                                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                                                <Border Background="#1A000000" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="2,1.5">
+                                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding StepCalendarHourCommand}" CommandParameter="-1" Padding="4,1" ToolTip="Hour -1">
+                                                                            <TextBlock Text="−" FontSize="11" FontWeight="Bold" Foreground="#A8ACB4"/>
+                                                                        </Button>
+                                                                        <TextBox x:Name="CalendarHourBox"
+                                                                                 Text="{Binding NewCalendarHourInput, UpdateSourceTrigger=PropertyChanged}"
+                                                                                 MaxLength="2" Width="23" Padding="0"
+                                                                                 Background="Transparent" Foreground="White" CaretBrush="#FF5E36"
+                                                                                 BorderThickness="0" FontSize="12" FontWeight="Bold"
+                                                                                 TextAlignment="Center" VerticalAlignment="Center"
+                                                                                 ToolTip="Type hour or scroll wheel"
+                                                                                 GotKeyboardFocus="OnCalendarTimeBoxGotFocus"
+                                                                                 PreviewMouseLeftButtonDown="OnCalendarTimeBoxMouseDown"
+                                                                                 PreviewMouseWheel="OnCalendarHourMouseWheel"
+                                                                                 LostFocus="OnCalendarTimeBoxLostFocus"/>
+                                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding StepCalendarHourCommand}" CommandParameter="1" Padding="4,1" ToolTip="Hour +1">
+                                                                            <TextBlock Text="+" FontSize="11" FontWeight="Bold" Foreground="#A8ACB4"/>
+                                                                        </Button>
+                                                                    </StackPanel>
+                                                                </Border>
+
+                                                                <TextBlock Text=":" Foreground="#8E9098" FontSize="13" FontWeight="Bold" Margin="4,0" VerticalAlignment="Center"/>
+
+                                                                <Border Background="#1A000000" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="2,1.5">
+                                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding StepCalendarMinuteCommand}" CommandParameter="-5" Padding="4,1" ToolTip="Minute -5">
+                                                                            <TextBlock Text="−" FontSize="11" FontWeight="Bold" Foreground="#A8ACB4"/>
+                                                                        </Button>
+                                                                        <TextBox x:Name="CalendarMinuteBox"
+                                                                                 Text="{Binding NewCalendarMinuteInput, UpdateSourceTrigger=PropertyChanged}"
+                                                                                 MaxLength="2" Width="23" Padding="0"
+                                                                                 Background="Transparent" Foreground="White" CaretBrush="#FF5E36"
+                                                                                 BorderThickness="0" FontSize="12" FontWeight="Bold"
+                                                                                 TextAlignment="Center" VerticalAlignment="Center"
+                                                                                 ToolTip="Type minutes (00-59) or scroll wheel"
+                                                                                 GotKeyboardFocus="OnCalendarTimeBoxGotFocus"
+                                                                                 PreviewMouseLeftButtonDown="OnCalendarTimeBoxMouseDown"
+                                                                                 PreviewMouseWheel="OnCalendarMinuteMouseWheel"
+                                                                                 LostFocus="OnCalendarTimeBoxLostFocus"/>
+                                                                        <Button Style="{StaticResource NotchIconBtn}" Command="{Binding StepCalendarMinuteCommand}" CommandParameter="5" Padding="4,1" ToolTip="Minute +5">
+                                                                            <TextBlock Text="+" FontSize="11" FontWeight="Bold" Foreground="#A8ACB4"/>
+                                                                        </Button>
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </StackPanel>
+
+                                                            <!-- AM / PM Segmented Pill Toggle (12-Hr Mode) -->
+                                                            <Border Background="#12FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="7" Padding="2" DockPanel.Dock="Right" VerticalAlignment="Center">
                                                                 <Border.Style>
                                                                     <Style TargetType="Border">
                                                                         <Setter Property="Visibility" Value="Visible"/>
                                                                         <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding NewCalendarIsAllDay}" Value="True">
+                                                                            <DataTrigger Binding="{Binding Use24HourClock}" Value="True">
                                                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
                                                                 </Border.Style>
-                                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE823;" FontSize="10" Foreground="#8E9098" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                                                    <TextBox Text="{Binding NewCalendarTime, UpdateSourceTrigger=PropertyChanged}"
-                                                                             Width="44" Background="Transparent" Foreground="White" CaretBrush="#FF5E36"
-                                                                             BorderThickness="0" FontSize="11.5" HorizontalContentAlignment="Center" VerticalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <Button Command="{Binding SetCalendarMeridiemCommand}" CommandParameter="False" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="amBd" CornerRadius="5" Padding="8,3" Background="#32FF5E36">
+                                                                                    <TextBlock x:Name="amTxt" Text="AM" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarIsPm, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                        <Setter TargetName="amBd" Property="Background" Value="Transparent"/>
+                                                                                        <Setter TargetName="amTxt" Property="Foreground" Value="#8E9098"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SetCalendarMeridiemCommand}" CommandParameter="True" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="2,0,0,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="pmBd" CornerRadius="5" Padding="8,3" Background="Transparent">
+                                                                                    <TextBlock x:Name="pmTxt" Text="PM" FontSize="10" FontWeight="Bold" Foreground="#8E9098"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarIsPm, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                        <Setter TargetName="pmBd" Property="Background" Value="#32FF5E36"/>
+                                                                                        <Setter TargetName="pmTxt" Property="Foreground" Value="White"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
                                                                 </StackPanel>
                                                             </Border>
+                                                        </DockPanel>
 
-                                                            <Button Command="{Binding ToggleCalendarAllDayCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" VerticalAlignment="Center">
-                                                                <Button.Template>
-                                                                    <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="allBd" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="7" Padding="9,4">
-                                                                            <TextBlock x:Name="allTxt" Text="All Day" Foreground="#B0B4BC" FontSize="11" FontWeight="SemiBold"/>
-                                                                        </Border>
-                                                                        <ControlTemplate.Triggers>
-                                                                            <DataTrigger Binding="{Binding DataContext.NewCalendarIsAllDay, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                                <Setter TargetName="allBd" Property="Background" Value="#2CFF5E36"/>
-                                                                                <Setter TargetName="allBd" Property="BorderBrush" Value="#80FF5E36"/>
-                                                                                <Setter TargetName="allTxt" Property="Foreground" Value="White"/>
-                                                                            </DataTrigger>
-                                                                        </ControlTemplate.Triggers>
-                                                                    </ControlTemplate>
-                                                                </Button.Template>
+                                                        <!-- Quick Time Preset Chips -->
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ApplyTimePresetCommand}" CommandParameter="+15m" Background="#14FFFFFF" Padding="6,2.5" Margin="0,0,4,0">
+                                                                <TextBlock Text="+15m" FontSize="9.5" FontWeight="SemiBold" Foreground="#D0D4DC"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ApplyTimePresetCommand}" CommandParameter="+1h" Background="#14FFFFFF" Padding="6,2.5" Margin="0,0,4,0">
+                                                                <TextBlock Text="+1h" FontSize="9.5" FontWeight="SemiBold" Foreground="#D0D4DC"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ApplyTimePresetCommand}" CommandParameter="Morning" Background="#14FFFFFF" Padding="6,2.5" Margin="0,0,4,0">
+                                                                <TextBlock Text="9 AM" FontSize="9.5" FontWeight="SemiBold" Foreground="#D0D4DC"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ApplyTimePresetCommand}" CommandParameter="Evening" Background="#14FFFFFF" Padding="6,2.5" Margin="0,0,4,0">
+                                                                <TextBlock Text="5 PM" FontSize="9.5" FontWeight="SemiBold" Foreground="#D0D4DC"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource NotchIconBtn}" Command="{Binding ApplyTimePresetCommand}" CommandParameter="Tonight" Background="#14FFFFFF" Padding="6,2.5">
+                                                                <TextBlock Text="8 PM" FontSize="9.5" FontWeight="SemiBold" Foreground="#D0D4DC"/>
                                                             </Button>
                                                         </StackPanel>
-                                                    </DockPanel>
+                                                    </StackPanel>
+
+                                                    <!-- MODE A: Reminder Specific Options (Repeat + High Priority + Chime) -->
+                                                    <Border Background="#14FF5E36" BorderBrush="#28FF5E36" BorderThickness="1" CornerRadius="8" Padding="7,5.5" Margin="0,0,0,7"
+                                                            Visibility="{Binding NewCalendarIsReminder, Converter={StaticResource BoolToVis}}">
+                                                        <StackPanel>
+                                                            <DockPanel Margin="0,0,0,5" LastChildFill="False">
+                                                                <TextBlock Text="Repeat" Foreground="#B8BCC4" FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+                                                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                                                    <Button Command="{Binding SetReminderRepeatRuleCommand}" CommandParameter="Once" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="Once" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarRepeatRule, RelativeSource={RelativeSource AncestorType=Window}}" Value="Once">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#48FF5E36"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SetReminderRepeatRuleCommand}" CommandParameter="Daily" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="Daily" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarRepeatRule, RelativeSource={RelativeSource AncestorType=Window}}" Value="Daily">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#48FF5E36"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SetReminderRepeatRuleCommand}" CommandParameter="Weekdays" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="Wkdays" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarRepeatRule, RelativeSource={RelativeSource AncestorType=Window}}" Value="Weekdays">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#48FF5E36"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SetReminderRepeatRuleCommand}" CommandParameter="Weekly" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="Weekly" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarRepeatRule, RelativeSource={RelativeSource AncestorType=Window}}" Value="Weekly">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#48FF5E36"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                </StackPanel>
+                                                            </DockPanel>
+
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Button Command="{Binding ToggleCalendarHighPriorityCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,5,0">
+                                                                    <Button.Template>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border x:Name="bd" CornerRadius="6" Padding="7,2.5" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
+                                                                                <TextBlock x:Name="txt" Text="★ Urgent" FontSize="9.5" FontWeight="SemiBold" Foreground="#B0B4BC"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <DataTrigger Binding="{Binding DataContext.NewCalendarIsHighPriority, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                    <Setter TargetName="bd" Property="Background" Value="#34FFD54F"/>
+                                                                                    <Setter TargetName="bd" Property="BorderBrush" Value="#80FFD54F"/>
+                                                                                    <Setter TargetName="txt" Property="Foreground" Value="#FFE89E"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Button.Template>
+                                                                </Button>
+
+                                                                <Button Command="{Binding ToggleCalendarPlayChimeCommand}" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                    <Button.Template>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border x:Name="bd" CornerRadius="6" Padding="7,2.5" Background="#16FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1">
+                                                                                <TextBlock x:Name="txt" Text="🔔 Chime Alert" FontSize="9.5" FontWeight="SemiBold" Foreground="#B0B4BC"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <DataTrigger Binding="{Binding DataContext.NewCalendarPlayChime, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                                                    <Setter TargetName="bd" Property="Background" Value="#2A69F0AE"/>
+                                                                                    <Setter TargetName="bd" Property="BorderBrush" Value="#6869F0AE"/>
+                                                                                    <Setter TargetName="txt" Property="Foreground" Value="#D8FFE8"/>
+                                                                                </DataTrigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </Button.Template>
+                                                                </Button>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- MODE B: Event Specific Options (Duration + Location / Meeting Link) -->
+                                                    <Border Background="#1200E5FF" BorderBrush="#2800E5FF" BorderThickness="1" CornerRadius="8" Padding="7,5.5" Margin="0,0,0,7"
+                                                            Visibility="{Binding NewCalendarIsEvent, Converter={StaticResource BoolToVis}}">
+                                                        <StackPanel>
+                                                            <DockPanel Margin="0,0,0,5" LastChildFill="False">
+                                                                <TextBlock Text="Duration" Foreground="#B8BCC4" FontSize="9.5" FontWeight="SemiBold" VerticalAlignment="Center" DockPanel.Dock="Left"/>
+                                                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                                                    <Button Command="{Binding SelectEventDurationCommand}" CommandParameter="15" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="15m" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarDurationMinutes, RelativeSource={RelativeSource AncestorType=Window}}" Value="15">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#4000E5FF"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SelectEventDurationCommand}" CommandParameter="30" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="30m" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarDurationMinutes, RelativeSource={RelativeSource AncestorType=Window}}" Value="30">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#4000E5FF"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SelectEventDurationCommand}" CommandParameter="60" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,3,0">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="1h" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarDurationMinutes, RelativeSource={RelativeSource AncestorType=Window}}" Value="60">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#4000E5FF"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                    <Button Command="{Binding SelectEventDurationCommand}" CommandParameter="120" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                                        <Button.Template>
+                                                                            <ControlTemplate TargetType="Button">
+                                                                                <Border x:Name="bd" CornerRadius="5" Padding="6,2" Background="#18FFFFFF">
+                                                                                    <TextBlock Text="2h" FontSize="9.5" Foreground="White"/>
+                                                                                </Border>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <DataTrigger Binding="{Binding DataContext.NewCalendarDurationMinutes, RelativeSource={RelativeSource AncestorType=Window}}" Value="120">
+                                                                                        <Setter TargetName="bd" Property="Background" Value="#4000E5FF"/>
+                                                                                    </DataTrigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Button.Template>
+                                                                    </Button>
+                                                                </StackPanel>
+                                                            </DockPanel>
+
+                                                            <Border Background="#18000000" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="6" Padding="7,3">
+                                                                <Grid>
+                                                                    <TextBlock Text="Location or meeting link (optional)..." Foreground="#52FFFFFF" FontSize="10" VerticalAlignment="Center" IsHitTestVisible="False">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding NewCalendarLocation}" Value="">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                    <TextBox Text="{Binding NewCalendarLocation, UpdateSourceTrigger=PropertyChanged}"
+                                                                             Background="Transparent" Foreground="White" CaretBrush="#00E5FF" BorderThickness="0" FontSize="10.5"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
 
                                                     <!-- Accent Color Tag & Save Action -->
                                                     <DockPanel LastChildFill="False">
@@ -2294,7 +3331,7 @@
                                                             <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FF5E36" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
                                                                 <Button.Template>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                        <Border x:Name="ring" Width="19" Height="19" CornerRadius="9.5" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
                                                                             <Ellipse Fill="#FF5E36"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -2308,7 +3345,7 @@
                                                             <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#00E5FF" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
                                                                 <Button.Template>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                        <Border x:Name="ring" Width="19" Height="19" CornerRadius="9.5" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
                                                                             <Ellipse Fill="#00E5FF"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -2322,7 +3359,7 @@
                                                             <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#69F0AE" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
                                                                 <Button.Template>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                        <Border x:Name="ring" Width="19" Height="19" CornerRadius="9.5" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
                                                                             <Ellipse Fill="#69F0AE"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -2336,7 +3373,7 @@
                                                             <Button Command="{Binding SelectCalendarAccentCommand}" CommandParameter="#FFD600" Cursor="Hand" FocusVisualStyle="{x:Null}">
                                                                 <Button.Template>
                                                                     <ControlTemplate TargetType="Button">
-                                                                        <Border x:Name="ring" Width="20" Height="20" CornerRadius="10" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
+                                                                        <Border x:Name="ring" Width="19" Height="19" CornerRadius="9.5" BorderThickness="1.5" BorderBrush="Transparent" Padding="2">
                                                                             <Ellipse Fill="#FFD600"/>
                                                                         </Border>
                                                                         <ControlTemplate.Triggers>
@@ -2352,8 +3389,8 @@
                                                         <Button Command="{Binding SaveNewCalendarItemCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}">
                                                             <Button.Template>
                                                                 <ControlTemplate TargetType="Button">
-                                                                    <Border x:Name="saveBd" CornerRadius="8" Padding="14,5" Background="#FF5E36">
-                                                                        <TextBlock Text="Save" Foreground="White" FontSize="11.5" FontWeight="Bold"/>
+                                                                    <Border x:Name="saveBd" CornerRadius="8" Padding="14,4.5" Background="#FF5E36">
+                                                                        <TextBlock Text="{Binding DataContext.ComposerSaveButtonText, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="White" FontSize="11" FontWeight="Bold"/>
                                                                     </Border>
                                                                     <ControlTemplate.Triggers>
                                                                         <Trigger Property="IsMouseOver" Value="True">
@@ -2380,9 +3417,90 @@
                                                     </Style.Triggers>
                                                 </Style>
                                             </Grid.Style>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- Sticky Overdue Today Rescue Banner -->
+                                            <Border Grid.Row="0" Background="#24FF5E36" BorderBrush="#65FF5E36" BorderThickness="1" CornerRadius="8" Padding="8,4.5" Margin="0,0,0,6"
+                                                    Visibility="{Binding Calendar.HasOverdueToday, Converter={StaticResource BoolToVis}}">
+                                                <DockPanel LastChildFill="True">
+                                                    <Button Command="{Binding SnoozeAllOverdueCommand}" DockPanel.Dock="Right" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="6,0,0,0">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="snzAll" Background="#32FFD54F" BorderBrush="#75FFD54F" BorderThickness="1" CornerRadius="6" Padding="7,2">
+                                                                    <TextBlock Text="Snooze All" Foreground="#FFE89E" FontSize="9.5" FontWeight="Bold"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="snzAll" Property="Background" Value="#4CFFD54F"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xEA8F;" Foreground="#FF7E5A" FontSize="10.5" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding Calendar.OverdueBannerText}" Foreground="#FFE6DE" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+
+                                            <!-- Agenda Filter Chips (All | Reminders | Events) -->
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
+                                                <Button Command="{Binding SetCalendarAgendaFilterCommand}" CommandParameter="0" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="fBd" CornerRadius="7" Padding="8,3" Background="#12FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1">
+                                                                <TextBlock x:Name="fTxt" Text="All" FontSize="10" FontWeight="SemiBold" Foreground="#A8ACB4"/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding DataContext.CalendarAgendaFilterIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="0">
+                                                                    <Setter TargetName="fBd" Property="Background" Value="#2CFFFFFF"/>
+                                                                    <Setter TargetName="fTxt" Property="Foreground" Value="White"/>
+                                                                </DataTrigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                                <Button Command="{Binding SetCalendarAgendaFilterCommand}" CommandParameter="1" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="0,0,4,0">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="fBd" CornerRadius="7" Padding="8,3" Background="#12FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1">
+                                                                <TextBlock x:Name="fTxt" Text="Reminders" FontSize="10" FontWeight="SemiBold" Foreground="#A8ACB4"/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding DataContext.CalendarAgendaFilterIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="1">
+                                                                    <Setter TargetName="fBd" Property="Background" Value="#2EFF5E36"/>
+                                                                    <Setter TargetName="fBd" Property="BorderBrush" Value="#70FF5E36"/>
+                                                                    <Setter TargetName="fTxt" Property="Foreground" Value="White"/>
+                                                                </DataTrigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                                <Button Command="{Binding SetCalendarAgendaFilterCommand}" CommandParameter="2" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="fBd" CornerRadius="7" Padding="8,3" Background="#12FFFFFF" BorderBrush="#1FFFFFFF" BorderThickness="1">
+                                                                <TextBlock x:Name="fTxt" Text="Events" FontSize="10" FontWeight="SemiBold" Foreground="#A8ACB4"/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <DataTrigger Binding="{Binding DataContext.CalendarAgendaFilterIndex, RelativeSource={RelativeSource AncestorType=Window}}" Value="2">
+                                                                    <Setter TargetName="fBd" Property="Background" Value="#2A00E5FF"/>
+                                                                    <Setter TargetName="fBd" Property="BorderBrush" Value="#6800E5FF"/>
+                                                                    <Setter TargetName="fTxt" Property="Foreground" Value="White"/>
+                                                                </DataTrigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </StackPanel>
 
                                             <!-- Empty Day Agenda State -->
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <StackPanel.Style>
                                                     <Style TargetType="StackPanel">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -2393,29 +3511,58 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </StackPanel.Style>
-                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="24" Foreground="#38FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                                <TextBlock Text="No events or reminders" Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="Tap + New to schedule on this day" Foreground="#48FFFFFF" FontSize="10.5" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE787;" FontSize="22" Foreground="#38FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                <TextBlock Text="Nothing scheduled here" Foreground="#75FFFFFF" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Tap + New for a Reminder or Event" Foreground="#48FFFFFF" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
 
-                                            <!-- Selected Day Events & Reminders List -->
-                                            <ListBox ItemsSource="{Binding Calendar.SelectedDayItems}"
+                                            <!-- Differentiated Events & Reminders List -->
+                                            <ListBox Grid.Row="2" ItemsSource="{Binding Calendar.SelectedDayItems}"
                                                      Background="Transparent" BorderThickness="0"
                                                      ItemContainerStyle="{StaticResource NoHighlightListBoxItem}"
                                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border Background="#12FFFFFF" BorderBrush="#1EFFFFFF" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,2.5">
-                                                            <DockPanel LastChildFill="True">
-                                                                <Button Style="{StaticResource NotchIconBtn}"
-                                                                        Command="{Binding DataContext.RemoveCalendarItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                        CommandParameter="{Binding}"
-                                                                        DockPanel.Dock="Right" Padding="4,2" ToolTip="Delete">
-                                                                    <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9.5" Foreground="#68FFFFFF"/>
-                                                                </Button>
+                                                        <Border CornerRadius="10" Padding="8,6" Margin="0,2.5" BorderThickness="1">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="#12FFFFFF"/>
+                                                                    <Setter Property="BorderBrush" Value="#1EFFFFFF"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsEvent}" Value="True">
+                                                                            <Setter Property="Background" Value="#12182430"/>
+                                                                            <Setter Property="BorderBrush" Value="#2400E5FF"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                                                            <Setter Property="Background" Value="#1CFF5E36"/>
+                                                                            <Setter Property="BorderBrush" Value="#60FF5E36"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsHappeningNow}" Value="True">
+                                                                            <Setter Property="BorderBrush" Value="#7069F0AE"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
 
-                                                                <!-- Samsung-style Circular Reminder Checkbox -->
+                                                            <DockPanel LastChildFill="True">
+                                                                <!-- Right: Edit + Delete Actions -->
+                                                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="4,0,0,0">
+                                                                    <Button Style="{StaticResource NotchIconBtn}"
+                                                                            Command="{Binding DataContext.EditCalendarItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"
+                                                                            Padding="4,2" ToolTip="Edit">
+                                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE70F;" FontSize="9.5" Foreground="#78FFFFFF"/>
+                                                                    </Button>
+                                                                    <Button Style="{StaticResource NotchIconBtn}"
+                                                                            Command="{Binding DataContext.RemoveCalendarItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"
+                                                                            Padding="4,2" ToolTip="Delete">
+                                                                        <TextBlock FontFamily="Segoe Fluent Icons" Text="&#xE711;" FontSize="9.5" Foreground="#68FFFFFF"/>
+                                                                    </Button>
+                                                                </StackPanel>
+
+                                                                <!-- Circular Interactive Reminder Checkbox -->
                                                                 <Button Command="{Binding DataContext.ToggleCalendarItemCompleteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                         CommandParameter="{Binding}"
                                                                         Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"
@@ -2435,38 +3582,39 @@
                                                                     </Button.Template>
                                                                 </Button>
 
-                                                                <!-- Vertical Accent Pill Bar for Calendar Events -->
-                                                                <Border Width="3.5" Height="22" CornerRadius="1.75" Background="{Binding AccentHex}" Margin="0,0,8,0" DockPanel.Dock="Left" VerticalAlignment="Center">
-                                                                    <Border.Style>
-                                                                        <Style TargetType="Border">
-                                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                                            <Style.Triggers>
-                                                                                <DataTrigger Binding="{Binding IsReminder}" Value="False">
-                                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                                </DataTrigger>
-                                                                            </Style.Triggers>
-                                                                        </Style>
-                                                                    </Border.Style>
-                                                                </Border>
+                                                                <!-- Vertical Accent Block Strip for Calendar Events -->
+                                                                <Border Width="4" Height="24" CornerRadius="2" Background="{Binding AccentHex}" Margin="0,0,8,0" DockPanel.Dock="Left" VerticalAlignment="Center"
+                                                                        Visibility="{Binding IsEvent, Converter={StaticResource BoolToVis}}"/>
 
                                                                 <StackPanel VerticalAlignment="Center">
-                                                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis">
-                                                                        <TextBlock.Style>
-                                                                            <Style TargetType="TextBlock">
-                                                                                <Setter Property="Foreground" Value="White"/>
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True">
-                                                                                        <Setter Property="Foreground" Value="#60FFFFFF"/>
-                                                                                        <Setter Property="TextDecorations" Value="Strikethrough"/>
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </TextBlock.Style>
-                                                                    </TextBlock>
-                                                                    <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
-                                                                        <TextBlock Text="{Binding DisplayTime}" Foreground="#8E9098" FontSize="10"/>
-                                                                        <TextBlock Text=" • Reminder" Foreground="{Binding AccentHex}" FontSize="10" FontWeight="SemiBold"
-                                                                                   Visibility="{Binding IsReminder, Converter={StaticResource BoolToVis}}"/>
+                                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                        <TextBlock Text="★ " Foreground="#FFD54F" FontSize="10.5" FontWeight="Bold"
+                                                                                   Visibility="{Binding IsHighPriority, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center"/>
+                                                                        <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="155" VerticalAlignment="Center">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Foreground" Value="White"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                                                            <Setter Property="Foreground" Value="#60FFFFFF"/>
+                                                                                            <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+
+                                                                        <!-- Live Countdown / Overdue Pill -->
+                                                                        <Border CornerRadius="5" Padding="5,1" Margin="6,0,0,0" Background="#1EFFFFFF"
+                                                                                Visibility="{Binding HasRelativeStatus, Converter={StaticResource BoolToVis}}">
+                                                                            <TextBlock Text="{Binding RelativeStatusText}" Foreground="{Binding StatusBadgeBrushHex}" FontSize="8.5" FontWeight="Bold"/>
+                                                                        </Border>
+                                                                    </StackPanel>
+
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,1.5,0,0">
+                                                                        <TextBlock Text="{Binding DisplayTime}" Foreground="#A0A5B0" FontSize="9.5" FontWeight="Medium"/>
+                                                                        <TextBlock Text=" • " Foreground="#45FFFFFF" FontSize="9.5"/>
+                                                                        <TextBlock Text="{Binding TypeTagText}" Foreground="{Binding AccentHex}" FontSize="9.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="115"/>
                                                                     </StackPanel>
                                                                 </StackPanel>
                                                             </DockPanel>

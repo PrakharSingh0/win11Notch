@@ -82,4 +82,13 @@ public sealed class AppSettings
 
     /// <summary>Whether to keep the compact HoverCapsule visible at all times instead of shrinking to IdlePill.</summary>
     public bool AlwaysShowHoverCapsule { get; set; } = false;
+
+    /// <summary>Whether to format clocks and calendar schedules in 24-hour format (false = 12-hour AM/PM).</summary>
+    public bool Use24HourClock { get; set; } = false;
+
+    /// <summary>Whether notification chimes play when calendar reminders become due.</summary>
+    public bool ReminderSoundChimesEnabled { get; set; } = true;
+
+    /// <summary>Default snooze duration in minutes for active reminder pills.</summary>
+    public int DefaultReminderSnoozeMinutes { get; set; } = 10;
 }

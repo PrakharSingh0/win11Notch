@@ -148,7 +148,8 @@ public sealed class MonitorService
         bool isBrightnessToast = false,
         bool hasUpcomingReminder = false,
         bool showFullLivePreview = true,
-        bool showDesktopAmbient = false)
+        bool showDesktopAmbient = false,
+        bool isReminderAlertActive = false)
     {
         bool isVerticalEdge = dockEdge is "Left" or "Right";
         int hw = Math.Clamp(handleWidth, 40, 200);
@@ -163,15 +164,19 @@ public sealed class MonitorService
         double hoverWidth;
         if (!dynamicSizing)
         {
-            hoverWidth = isPowerToast ? 355 : (isVolumeToast || isBrightnessToast) ? 290 : (isMediaToast ? 370 : 300);
+            hoverWidth = isReminderAlertActive ? 430 : isPowerToast ? 355 : (isVolumeToast || isBrightnessToast) ? 290 : (isMediaToast ? 370 : 300);
+        }
+        else if (isVolumeToast || isBrightnessToast)
+        {
+            hoverWidth = 290;
         }
         else if (isPowerToast)
         {
             hoverWidth = 355;
         }
-        else if (isVolumeToast || isBrightnessToast)
+        else if (isReminderAlertActive)
         {
-            hoverWidth = 290;
+            hoverWidth = 430;
         }
         else if (isMediaToast)
         {
@@ -194,11 +199,11 @@ public sealed class MonitorService
             hoverWidth = 275; // minimal clock, date & network badge capsule
         }
 
-        if (hasBluetoothBattery && !isVolumeToast && !isPowerToast && !isBrightnessToast)
+        if (hasBluetoothBattery && !isVolumeToast && !isPowerToast && !isBrightnessToast && !isReminderAlertActive)
         {
             hoverWidth += 54;
         }
-        if (hasUpcomingReminder && !isMediaPlaying && !isStopwatchRunning && !isVolumeToast && !isPowerToast && !isBrightnessToast && !isMediaToast)
+        if (hasUpcomingReminder && !isMediaPlaying && !isStopwatchRunning && !isVolumeToast && !isPowerToast && !isBrightnessToast && !isMediaToast && !isReminderAlertActive)
         {
             hoverWidth += 92;
         }

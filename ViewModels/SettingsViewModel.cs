@@ -50,6 +50,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int    _dailyWaterTargetCups         = 8;
     [ObservableProperty] private bool   _timerSoundChimesEnabled      = true;
     [ObservableProperty] private bool   _dualActivityEnabled          = true;
+    [ObservableProperty] private bool   _use24HourClock               = false;
+    [ObservableProperty] private bool   _reminderSoundChimesEnabled   = true;
+    [ObservableProperty] private int    _defaultReminderSnoozeMinutes = 10;
 
     public string AppVersionText    { get; }
     public string AuthorName        => "Prakhar Singh";
@@ -109,6 +112,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             DailyWaterTargetCups         = s.DailyWaterTargetCups;
             TimerSoundChimesEnabled      = s.TimerSoundChimesEnabled;
             DualActivityEnabled          = s.DualActivityEnabled;
+            Use24HourClock               = s.Use24HourClock;
+            ReminderSoundChimesEnabled   = s.ReminderSoundChimesEnabled;
+            DefaultReminderSnoozeMinutes = Math.Clamp(s.DefaultReminderSnoozeMinutes, 5, 60);
             LaunchAtStartup              = _startupService.IsStartupEnabled();
 
             Monitors.Clear();
@@ -156,6 +162,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnDailyWaterTargetCupsChanged(int value)            => ApplyAndSave();
     partial void OnTimerSoundChimesEnabledChanged(bool value)        => ApplyAndSave();
     partial void OnDualActivityEnabledChanged(bool value)            => ApplyAndSave();
+    partial void OnUse24HourClockChanged(bool value)                 => ApplyAndSave();
+    partial void OnReminderSoundChimesEnabledChanged(bool value)     => ApplyAndSave();
+    partial void OnDefaultReminderSnoozeMinutesChanged(int value)    => ApplyAndSave();
 
     [RelayCommand] private void SelectHandleColor(string hex) => HandleColor = hex;
 
@@ -195,6 +204,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.DailyWaterTargetCups         = DailyWaterTargetCups;
         s.TimerSoundChimesEnabled      = TimerSoundChimesEnabled;
         s.DualActivityEnabled          = DualActivityEnabled;
+        s.Use24HourClock               = Use24HourClock;
+        s.ReminderSoundChimesEnabled   = ReminderSoundChimesEnabled;
+        s.DefaultReminderSnoozeMinutes = DefaultReminderSnoozeMinutes;
 
         _ = _settingsService.SaveAsync();
         SettingsChanged?.Invoke();
@@ -226,6 +238,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         DailyWaterTargetCups         = 8;
         TimerSoundChimesEnabled      = true;
         DualActivityEnabled          = true;
+        Use24HourClock               = false;
+        ReminderSoundChimesEnabled   = true;
+        DefaultReminderSnoozeMinutes = 10;
         LaunchAtStartup              = false;
     }
 
